@@ -1,7 +1,7 @@
-// src/app/providers.tsx (혹은 원하는 위치에 생성)
+// src/app/providers.tsx
 'use client'; // 이 파일은 클라이언트 컴포넌트입니다.
 
-import { useState, ReactNode } from 'react'; // React Query v5부터는 useState 필요 X
+import { useState, ReactNode } from 'react'; 
 import { WagmiProvider, createConfig, http } from 'wagmi';
 import { mainnet, sepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,34 +10,63 @@ import { injected, walletConnect, coinbaseWallet } from 'wagmi/connectors';
 import { Web3Provider } from '@/providers/Web3Provider'; // Web3Provider 경로 확인
 
 // WalletConnect 프로젝트 ID 설정 (환경 변수 사용 권장)
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
-
-if (!projectId) {
-  console.warn("Warning: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set. WalletConnect functionality will be limited.");
-}
+const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'default-project-id';
 
 // Wagmi 설정 생성
 const config = createConfig({
   chains: [mainnet, sepolia],
   connectors: [
-    injected({ shimDisconnect: true }),
-    ...(projectId ? [walletConnect({ projectId })] : []),
-    coinbaseWallet({ appName: 'Text Battle Game', darkMode: true }),
+    // MetaMask 및 기타 브라우저 지갑
+    injected({ 
+      shimDisconnect: true,
+      // 지원하는 모든 브라우저 내장 지갑 연결 시도
+      getProvider: () => {
+        try {
+          // injected provider 확인
+          const providers = window.ethereum ? 
+            Array.isArray(window.ethereum.providers) ? 
+              window.ethereum.providers : [window.ethereum] : 
+              [];
+              
+          console.log("Found injected providers:", providers.length);
+          return window.ethereum;
+        } catch (error) {
+          console.error("Error getting injected provider:", error);
+          return undefined;
+        }
+      }
+    }),
+    
+    // WalletConnect
+    walletConnect({ 
+      projectId,
+      showQrModal: true,
+      metadata: {
+        name: 'Text Battle Game',
+        description: 'A web3-based text battle game',
+        url: 'https://textbattle.example.com',
+        icons: ['https://textbattle.example.com/icon.png']
+      }
+    }),
+    
+    // Coinbase Wallet
+    coinbaseWallet({ 
+      appName: 'Text Battle Game', 
+      appLogoUrl: '/logo.png',
+      darkMode: true 
+    }),
   ],
   transports: {
     [mainnet.id]: http(),
     [sepolia.id]: http(),
   },
-  // ssr: true, // 필요시 활성화
 });
 
 // React Query 클라이언트 생성 (v5 스타일)
-// useState를 사용하여 클라이언트 측에서만 인스턴스 생성 보장
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // SSR/SSG 사용 시 staleTime 설정 고려
         staleTime: 60 * 1000, // 1분
       },
     },
@@ -56,7 +85,6 @@ function getQueryClient() {
     return browserQueryClient;
   }
 }
-
 
 export default function Providers({ children }: { children: ReactNode }) {
   // 클라이언트 측에서만 queryClient 인스턴스 유지 (React Query v5 권장 방식)

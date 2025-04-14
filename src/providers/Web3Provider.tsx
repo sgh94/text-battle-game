@@ -7,13 +7,11 @@ import {
   useDisconnect,
   useSignMessage
 } from 'wagmi';
-// import { InjectedConnector } from 'wagmi/connectors/injected'; // <<<--- 이 줄을 삭제하세요
 
 interface Web3ContextType {
   address: `0x${string}` | undefined;
   isConnected: boolean;
-  // isConnecting: boolean; // isPending으로 대체될 수 있으므로 잠시 주석 처리 또는 isWagmiConnecting 사용
-  isConnecting: boolean; // <<<--- isWagmiConnecting으로 관리
+  isConnecting: boolean;
   connectWallet: (connector?: any) => void;
   disconnectWallet: () => void;
   authHeader: string | null;
@@ -35,14 +33,22 @@ const Web3Context = createContext<Web3ContextType>({
 export const useWeb3 = () => useContext(Web3Context);
 
 export function Web3Provider({ children }: { children: ReactNode }) {
-  const { address, isConnected, isConnecting: isAccountConnecting, connector: activeConnector } = useAccount(); // useAccount의 isConnecting도 있음
-  // useConnect 훅에서 isLoading 대신 isPending 사용
-  const { connect, connectors, error: connectError, isPending: isWagmiConnecting } = useConnect(); // <<<--- isLoading을 isPending으로 변경
+  const { address, isConnected, isConnecting: isAccountConnecting, connector: activeConnector } = useAccount();
+  const { connect, connectors, error: connectError, isPending: isWagmiConnecting } = useConnect();
   const { disconnect } = useDisconnect();
-  const { signMessageAsync, error: signError, isPending: isSigning } = useSignMessage(); // useSignMessage는 isLoading 유지
+  const { signMessageAsync, error: signError, isPending: isSigning } = useSignMessage();
 
   const [authHeader, setAuthHeader] = useState<string | null>(null);
   const [appError, setAppError] = useState<string | null>(null);
+
+  // Log available connectors on mount for debugging
+  useEffect(() => {
+    console.log("Available connectors:", connectors.map(c => ({
+      id: c.id,
+      name: c.name,
+      ready: c.ready
+    })));
+  }, [connectors]);
 
   // 연결 상태 변경 시 localStorage 업데이트
   useEffect(() => {
@@ -120,15 +126,50 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   }, [signMessageAsync]); // 의존성 배열에 signMessageAsync 포함
 
 
-  // 지갑 연결 함수
+  // 지갑 연결 함수 (개선됨)
   const connectWallet = useCallback((connectorToUse?: any) => {
     setAppError(null); // 연결 시도 시 이전 에러 초기화
-    const connector = connectorToUse || connectors.find(c => c.ready && c.id === 'injected') || connectors.find(c => c.ready); // 사용 가능(ready)한 커넥터 우선 찾기
+    
+    // 사용 가능한 connectors 모두 로깅
+    console.log("All connectors:", connectors.map(c => ({
+      id: c.id, 
+      name: c.name, 
+      ready: c.ready
+    })));
+    
+    // 사용할 connector 결정 - 여러 옵션 시도
+    let connector;
+    
+    // 1. 명시적으로 제공된 connector가 있으면 사용
+    if (connectorToUse && connectors.includes(connectorToUse)) {
+      connector = connectorToUse;
+    } 
+    // 2. MetaMask connector 찾기
+    else if (!connector) {
+      connector = connectors.find(c => c.id === 'injected' && c.name === 'MetaMask' && c.ready);
+    }
+    // 3. 'injected' 타입의 준비된 모든 connector 시도
+    else if (!connector) {
+      connector = connectors.find(c => c.id === 'injected' && c.ready);
+    }
+    // 4. coinbaseWallet connector 시도
+    else if (!connector) {
+      connector = connectors.find(c => c.id === 'coinbaseWallet' && c.ready);
+    }
+    // 5. walletConnect connector 시도
+    else if (!connector) {
+      connector = connectors.find(c => c.id === 'walletConnect' && c.ready);
+    }
+    // 6. 사용 가능한 다른 모든 connector 시도
+    else if (!connector) {
+      connector = connectors.find(c => c.ready);
+    }
+
     if (connector) {
       console.log(`Connecting with ${connector.name}...`); // 연결 시도 로그
       connect({ connector });
     } else {
-      console.log("No suitable ready connector found."); // 로그 추가
+      console.log("Available connectors:", connectors); // 로그 추가
       setAppError("No suitable wallet connector found or ready. Please install MetaMask, ensure your wallet is unlocked, or use another supported wallet.");
     }
   }, [connect, connectors]);

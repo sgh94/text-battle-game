@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateAuth } from '@/lib/auth';
 import { Character } from '@/types';
 
+// Mock database for local development (when KV is not available)
+const mockCharacterDb = new Map<string, Character>();
+const mockUserCharacterIds = new Map<string, string[]>();
+const mockCharacterRankings = new Map<string, number>();
+
 // Create a new character
 export async function POST(request: NextRequest) {
   try {
@@ -23,9 +28,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user's existing characters
-    const characterIdsResponse = await kv.smembers(`user:${userAddress}:characters`);
-    // Ensure characterIds is an array
-    const characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
+    let characterIds: string[] = [];
+
+    try {
+      const characterIdsResponse = await kv.smembers(`user:${userAddress}:characters`);
+      // Ensure characterIds is an array
+      characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
+    } catch (kvError) {
+      console.warn('KV database error on fetching character IDs, using mock database:', kvError);
+      // Fall back to mock database
+      characterIds = mockUserCharacterIds.get(userAddress) || [];
+    }
 
     // Check if user already has 5 characters
     if (characterIds.length >= 5) {
@@ -43,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     const character: Character = {
       id: characterId,
-      owner: userAddress!,
+      owner: userAddress,
       name,
       traits,
       elo: defaultElo,
@@ -53,14 +66,24 @@ export async function POST(request: NextRequest) {
       createdAt: Date.now(),
     };
 
-    // Save character data
-    await kv.hset(`character:${characterId}`, character as Record<string, unknown>);
-
-    // Add character to user's character list
-    await kv.sadd(`user:${userAddress}:characters`, characterId);
-
-    // Add character to the global ranking set with ELO as score
-    await kv.zadd('characters:ranking', { score: defaultElo, member: characterId });
+    try {
+      // Save character data to KV
+      await kv.hset(`character:${characterId}`, character as Record<string, unknown>);
+      // Add character to user's character list
+      await kv.sadd(`user:${userAddress}:characters`, characterId);
+      // Add character to the global ranking set with ELO as score
+      await kv.zadd('characters:ranking', { score: defaultElo, member: characterId });
+    } catch (kvError) {
+      console.warn('KV database error on character creation, using mock database:', kvError);
+      // Fall back to mock database
+      mockCharacterDb.set(characterId, character);
+      
+      const userCharacters = mockUserCharacterIds.get(userAddress) || [];
+      userCharacters.push(characterId);
+      mockUserCharacterIds.set(userAddress, userCharacters);
+      
+      mockCharacterRankings.set(characterId, defaultElo);
+    }
 
     return NextResponse.json({ success: true, character });
   } catch (error) {
@@ -78,9 +101,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Address is required' }, { status: 400 });
     }
 
-    const characterIdsResponse = await kv.smembers(`user:${address.toLowerCase()}:characters`);
-    // Ensure characterIds is an array
-    const characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
+    const lowerCaseAddress = address.toLowerCase();
+    let characterIds: string[] = [];
+
+    try {
+      const characterIdsResponse = await kv.smembers(`user:${lowerCaseAddress}:characters`);
+      // Ensure characterIds is an array
+      characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
+    } catch (kvError) {
+      console.warn('KV database error on fetching character IDs, using mock database:', kvError);
+      // Fall back to mock database
+      characterIds = mockUserCharacterIds.get(lowerCaseAddress) || [];
+    }
 
     if (!characterIds || characterIds.length === 0) {
       return NextResponse.json({ characters: [] });
@@ -89,7 +121,16 @@ export async function GET(request: NextRequest) {
     // Fetch all characters in parallel
     const characters = await Promise.all(
       characterIds.map(async (id: string) => {
-        const character = await kv.hgetall<Character>(`character:${id}`);
+        let character: Character | null = null;
+        
+        try {
+          character = await kv.hgetall<Character>(`character:${id}`);
+        } catch (kvError) {
+          console.warn(`KV database error on fetching character ${id}, using mock database:`, kvError);
+          // Fall back to mock database
+          character = mockCharacterDb.get(id) || null;
+        }
+        
         return character;
       })
     );

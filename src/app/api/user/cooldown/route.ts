@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const address = request.nextUrl.searchParams.get('address');
+    const characterId = request.nextUrl.searchParams.get('characterId');
 
-    if (!address) {
-      return NextResponse.json({ error: 'Address is required' }, { status: 400 });
+    if (!characterId) {
+      return NextResponse.json({ error: 'Character ID is required' }, { status: 400 });
     }
 
-    // Get last battle time
-    const lastBattleTime = await kv.get<number>(`user:${address.toLowerCase()}:lastBattle`) || 0;
+    // Get last battle time for the character
+    const lastBattleTime = await kv.get<number>(`character:${characterId}:lastBattle`) || 0;
     
     // Calculate remaining cooldown in seconds
     const now = Date.now();

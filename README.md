@@ -24,8 +24,8 @@ A web3-based text battle game where characters fight based on their traits using
 ### Prerequisites
 
 - Node.js 16.8 or later
-- Vercel account
-- OpenAI API key
+- Vercel account (for production)
+- OpenAI API key (for battle decisions)
 - WalletConnect Project ID (for wallet connection)
 
 ### Local Development
@@ -42,14 +42,12 @@ npm install
 ```
 
 3. Create a `.env.local` file with the required environment variables:
-```
-KV_URL=your_kv_url
-KV_REST_API_TOKEN=your_kv_token
-KV_REST_API_READ_ONLY_TOKEN=your_read_only_token
-KV_REST_API_URL=your_kv_api_url
-REDIS_URL=your_redis_url
-OPENAI_API_KEY=your_openai_api_key
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id
+```bash
+# Copy the example environment file
+cp .env.local.example .env.local
+
+# Edit the file with your specific settings if needed
+# For local development without KV database, you can keep the default settings
 ```
 
 4. Run the development server
@@ -58,6 +56,22 @@ npm run dev
 ```
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+### Development Mode
+
+The application includes a development mode that:
+
+1. Uses a mock in-memory database when Vercel KV is not available
+2. Reduces signature requests with caching
+3. Provides development-only authentication options
+
+To enable these features, make sure these settings are enabled in your `.env.local`:
+
+```
+NEXT_PUBLIC_USE_DEV_AUTH=true
+NEXT_PUBLIC_BYPASS_AUTH=true
+NEXT_PUBLIC_USE_MOCK_DB=true
+```
 
 ### Deployment
 
@@ -79,7 +93,7 @@ This application is configured for deployment on Vercel:
     /character - Character details
     /ranking - Ranking page
   /components - React components
-  /background - Background processes and providers
+  /providers - React context providers
   /common - Common utilities and configuration
     /atoms - State management with Jotai
   /lib - Utility functions
@@ -101,6 +115,12 @@ The app uses RainbowKit for a user-friendly wallet connection experience, suppor
 - Coinbase Wallet
 - Phantom Wallet
 - And more...
+
+## Troubleshooting
+
+- **Database Connection Issues**: In development mode, the app will fall back to an in-memory mock database when Vercel KV is not available.
+- **Auth Token Issues**: In development mode, you can enable `NEXT_PUBLIC_USE_DEV_AUTH=true` to reduce signature requests and streamline testing.
+- **Multiple Signature Requests**: The app now includes auth token caching to prevent excessive signature requests.
 
 ## License
 

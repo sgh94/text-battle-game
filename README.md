@@ -10,6 +10,7 @@ A web3-based text battle game where characters fight based on their traits using
 4. Battles are decided by an LLM based on character traits
 5. Character stats and battle history tracking
 6. 3-minute cooldown between battles
+7. AI characters for battle testing and when no human opponents are available
 
 ## Tech Stack
 
@@ -73,6 +74,28 @@ NEXT_PUBLIC_BYPASS_AUTH=true
 NEXT_PUBLIC_USE_MOCK_DB=true
 ```
 
+### Adding AI Characters for Battle Testing
+
+To create AI characters for battle testing:
+
+1. Start the development server:
+```bash
+npm run dev
+```
+
+2. In a separate terminal, run the seed script:
+```bash
+npm run seed:dev
+```
+
+This will create 10 AI characters with various traits and ELO scores. These characters will be available as opponents when battling.
+
+If you want to see the available AI characters:
+
+```
+GET http://localhost:3000/api/character/seed
+```
+
 ### Deployment
 
 This application is configured for deployment on Vercel:
@@ -98,6 +121,7 @@ This application is configured for deployment on Vercel:
     /atoms - State management with Jotai
   /lib - Utility functions
   /hooks - Custom React hooks
+  /scripts - Utility scripts (e.g., AI character seeding)
 ```
 
 ## API Routes
@@ -106,6 +130,17 @@ This application is configured for deployment on Vercel:
 - `/api/character` - Character management
 - `/api/battle` - Battle system
 - `/api/ranking` - Ranking system
+- `/api/character/seed` - AI character management (development only)
+
+## Battle System
+
+The battle system works as follows:
+
+1. When a user initiates a battle with their character, the system looks for an opponent with a similar ELO score.
+2. If a suitable human opponent is not found, an AI character is used instead.
+3. Battle outcomes are determined either randomly (in development) or using LLM (in production).
+4. Characters earn or lose ELO points based on battle results.
+5. Characters have a 3-minute cooldown period between battles.
 
 ## Wallet Connection
 
@@ -121,6 +156,7 @@ The app uses RainbowKit for a user-friendly wallet connection experience, suppor
 - **Database Connection Issues**: In development mode, the app will fall back to an in-memory mock database when Vercel KV is not available.
 - **Auth Token Issues**: In development mode, you can enable `NEXT_PUBLIC_USE_DEV_AUTH=true` to reduce signature requests and streamline testing.
 - **Multiple Signature Requests**: The app now includes auth token caching to prevent excessive signature requests.
+- **No Opponents Available**: If you're not seeing any opponents for battle, run the seed script to create AI characters.
 
 ## License
 

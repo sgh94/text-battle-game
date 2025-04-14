@@ -1,6 +1,7 @@
 import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { User } from '@/types';
 
 // Create a new user or retrieve existing user
 export async function POST(request: NextRequest) {
@@ -13,13 +14,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the signature
-    const recoveredAddress = ethers.verifyMessage(message, signature);
-    if (recoveredAddress.toLowerCase() !== address.toLowerCase()) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    try {
+      const recoveredAddress = ethers.verifyMessage(message, signature);
+      if (recoveredAddress.toLowerCase() !== address.toLowerCase()) {
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    } catch (error) {
+      console.error('Signature verification error:', error);
+      return NextResponse.json({ error: 'Signature verification failed' }, { status: 401 });
     }
 
     // Check if user exists
-    let user = await kv.hgetall(`user:${address.toLowerCase()}`);
+    let user = await kv.hgetall<User>(`user:${address.toLowerCase()}`);
 
     // Create user if it doesn't exist
     if (!user) {
@@ -54,7 +60,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Address is required' }, { status: 400 });
     }
 
-    const user = await kv.hgetall(`user:${address.toLowerCase()}`);
+    const user = await kv.hgetall<User>(`user:${address.toLowerCase()}`);
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

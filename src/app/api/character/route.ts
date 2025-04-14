@@ -1,6 +1,7 @@
 import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAuth } from '@/lib/auth';
+import { Character } from '@/types';
 
 // Create a new character
 export async function POST(request: NextRequest) {
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user's existing characters
-    const characterIds = await kv.smembers(`user:${userAddress}:characters`);
+    const characterIds = await kv.smembers<string>(`user:${userAddress}:characters`);
     
     // Check if user already has 5 characters
     if (characterIds.length >= 5) {
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     // Set initial ELO score
     const defaultElo = 1000;
     
-    const character = {
+    const character: Character = {
       id: characterId,
       owner: userAddress,
       name,
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Address is required' }, { status: 400 });
     }
 
-    const characterIds = await kv.smembers(`user:${address.toLowerCase()}:characters`);
+    const characterIds = await kv.smembers<string>(`user:${address.toLowerCase()}:characters`);
     
     if (!characterIds || characterIds.length === 0) {
       return NextResponse.json({ characters: [] });
@@ -82,12 +83,12 @@ export async function GET(request: NextRequest) {
     // Fetch all characters in parallel
     const characters = await Promise.all(
       characterIds.map(async (id) => {
-        const character = await kv.hgetall(`character:${id}`);
+        const character = await kv.hgetall<Character>(`character:${id}`);
         return character;
       })
     );
 
-    return NextResponse.json({ characters });
+    return NextResponse.json({ characters: characters.filter(char => char !== null) });
   } catch (error) {
     console.error('Error fetching characters:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

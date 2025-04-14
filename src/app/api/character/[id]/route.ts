@@ -1,5 +1,6 @@
 import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
+import { Character } from '@/types';
 
 export async function GET(
   request: NextRequest,
@@ -7,7 +8,7 @@ export async function GET(
 ) {
   try {
     const characterId = params.id;
-    const character = await kv.hgetall(`character:${characterId}`);
+    const character = await kv.hgetall<Character>(`character:${characterId}`);
 
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
@@ -28,7 +29,7 @@ export async function DELETE(
     // Implement authentication and authorization here
     
     const characterId = params.id;
-    const character = await kv.hgetall(`character:${characterId}`);
+    const character = await kv.hgetall<Character>(`character:${characterId}`);
 
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });

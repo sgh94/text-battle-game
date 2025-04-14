@@ -2,8 +2,8 @@ import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Config } from 'wagmi';
 import { config } from '../wallet-config';
 
-// Wagmi 설정을 저장할 atom
-const wagmiConfigAtom = atom<Config | null>(config);
+// Wagmi 설정을 저장할 atom - 항상 설정값 반환하도록 수정
+const wagmiConfigAtom = atom<Config>(config);
 
 // Wagmi 설정을 가져오는 hook
 export const useWagmiConfig = () => useAtomValue(wagmiConfigAtom);
@@ -41,3 +41,11 @@ const chainIdAtom = atom<number | null>(null);
 // 체인 ID 관리 hooks
 export const useChainId = () => useAtomValue(chainIdAtom);
 export const useSetChainId = () => useSetAtom(chainIdAtom);
+
+// 인증 상태 관리
+const isAuthenticatingAtom = atom<boolean>(false);
+
+// 인증 상태 관리 hooks
+export const useAuthenticatingState = () => useAtom(isAuthenticatingAtom);
+export const useIsAuthenticating = () => useAtomValue(isAuthenticatingAtom);
+export const useSetAuthenticating = () => useSetAtom(isAuthenticatingAtom);

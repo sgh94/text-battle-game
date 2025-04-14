@@ -5,7 +5,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 
 // 생성할 클라이언트 Provider 컴포넌트 임포트 (경로는 실제 생성 위치에 맞게 조정)
-import Providers from './providers';
+import WalletProvider from '@/background/wallet-provider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,10 +24,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* 클라이언트 측 Provider 로직은 Providers 컴포넌트에 위임 */}
-        <Providers>
+        {/* 클라이언트 측 Provider 로직은 WalletProvider 컴포넌트에 위임 */}
+        <WalletProvider>
           {children}
-        </Providers>
+        </WalletProvider>
       </body>
     </html>
   );

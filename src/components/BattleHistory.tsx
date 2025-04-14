@@ -9,6 +9,7 @@ interface Battle {
   winner: string;
   isDraw: boolean;
   explanation: string;
+  narrative: string;
   timestamp: number;
 }
 
@@ -107,6 +108,9 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
             const result = battle.isDraw ? 'Draw' : (battle.winner === characterId ? 'Win' : 'Loss');
             const resultClass = battle.isDraw ? 'text-gray-400' : (battle.winner === characterId ? 'text-green-500' : 'text-red-500');
             
+            // Use narrative if available, otherwise fall back to explanation
+            const battleDescription = battle.narrative || battle.explanation;
+            
             return (
               <div key={battle.id} className="bg-gray-800 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-2">
@@ -132,7 +136,7 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
                 </div>
                 
                 <div className="text-sm text-gray-300">
-                  <p>{battle.explanation}</p>
+                  <p>{battleDescription}</p>
                 </div>
               </div>
             );

@@ -27,7 +27,8 @@ export interface Battle extends Record<string, unknown> {
   character2: string;
   winner: string;
   isDraw: boolean;
-  explanation: string;
+  explanation: string; // Keep for backward compatibility
+  narrative: string;   // Add narrative field for detailed battle description
   timestamp: number;
 }
 

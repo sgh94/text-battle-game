@@ -44,16 +44,16 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
     try {
       setIsLoading(true);
       setError('');
-      
+
       const response = await fetch(`/api/character/${id}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch character');
       }
-      
+
       const data = await response.json();
       setCharacter(data.character);
-      
+
       // Check if there's an active cooldown for this character
       checkCooldown();
     } catch (error: any) {
@@ -66,10 +66,10 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   const checkCooldown = async () => {
     try {
       const response = await fetch(`/api/user/cooldown?characterId=${id}`);
-      
+
       if (response.ok) {
         const data = await response.json();
-        
+
         if (data.cooldown > 0) {
           setCooldown(data.cooldown);
           startCooldownTimer(data.cooldown);
@@ -84,9 +84,9 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
 
   const startCooldownTimer = (seconds: number) => {
     if (cooldownTimer) clearInterval(cooldownTimer);
-    
+
     setCooldown(seconds);
-    
+
     const timer = setInterval(() => {
       setCooldown((prev) => {
         if (prev === null || prev <= 1) {
@@ -96,17 +96,17 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         return prev - 1;
       });
     }, 1000);
-    
+
     setCooldownTimer(timer);
   };
 
   const startBattle = async () => {
     if (!authHeader || !character || isBattling) return;
-    
+
     try {
       setIsBattling(true);
       setBattleResult(null);
-      
+
       const response = await fetch('/api/battle', {
         method: 'POST',
         headers: {
@@ -115,9 +115,9 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         },
         body: JSON.stringify({ characterId: id }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 429 && data.error) {
           // Cooldown active
@@ -129,7 +129,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         }
         throw new Error(data.error || 'Battle failed');
       }
-      
+
       // Update character with new ELO
       if (data.updatedStats) {
         if (data.battle.winner === character.id) {
@@ -145,10 +145,10 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
           setCharacter(data.updatedStats.loser);
         }
       }
-      
+
       // Set battle result
       setBattleResult(data.battle);
-      
+
       // Start cooldown
       startCooldownTimer(180); // 3 minutes
     } catch (error: any) {
@@ -161,25 +161,25 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
 
   const deleteCharacter = async () => {
     if (!authHeader || !character || isDeleting) return;
-    
+
     if (!confirm('Are you sure you want to delete this character? This action cannot be undone.')) {
       return;
     }
-    
+
     try {
       setIsDeleting(true);
-      
+
       const response = await fetch(`/api/character/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': authHeader,
         },
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to delete character');
       }
-      
+
       // Redirect to the home page after successful deletion
       router.push('/');
     } catch (error: any) {
@@ -218,7 +218,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       <div className="mb-4">
         <Link href="/" className="text-blue-400 hover:underline">&larr; Back to My Characters</Link>
       </div>
-      
+
       <div className="bg-gray-800 rounded-lg p-6 mb-6">
         <div className="flex justify-between items-start mb-4">
           <h2 className="text-2xl font-bold">{character.name}</h2>
@@ -229,12 +229,12 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
             </div>
           </div>
         </div>
-        
+
         <div className="mb-6">
           <h3 className="text-gray-400 mb-2">Traits</h3>
           <p className="whitespace-pre-line">{character.traits}</p>
         </div>
-        
+
         {isOwner && (
           <div className="mt-6 space-y-3">
             <button
@@ -258,7 +258,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                 'Start Battle'
               )}
             </button>
-            
+
             <button
               onClick={deleteCharacter}
               disabled={isDeleting}
@@ -273,27 +273,27 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                   삭제 중...
                 </div>
               ) : (
-                '케릭터 삭제'
+                'Delete Character'
               )}
             </button>
           </div>
         )}
-        
+
         {battleResult && (
           <div className="mt-6 bg-gray-700 p-4 rounded-lg">
             <h3 className="text-xl font-bold mb-2">Battle Result</h3>
             <p className="mb-4">
-              {battleResult.isDraw 
-                ? 'Draw!' 
-                : battleResult.winner === character.id 
-                  ? 'Victory!' 
+              {battleResult.isDraw
+                ? 'Draw!'
+                : battleResult.winner === character.id
+                  ? 'Victory!'
                   : 'Defeat!'}
             </p>
             <p className="text-gray-300">{battleResult.narrative || battleResult.explanation}</p>
           </div>
         )}
       </div>
-      
+
       <BattleHistory characterId={id} />
     </div>
   );

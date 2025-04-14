@@ -98,7 +98,8 @@ export async function POST(request: NextRequest) {
     }
 
     const userAddress = authResult.address;
-    const { characterId } = await request.json();
+    const requestData = await request.json();
+    const characterId = requestData?.characterId as string;
 
     if (!characterId) {
       return NextResponse.json({ error: 'Character ID is required' }, { status: 400 });
@@ -148,8 +149,8 @@ export async function POST(request: NextRequest) {
     // Convert array format to object format with member/score
     const opponents: Array<ScoreMember> = [];
     for (let i = 0; i < allCharactersInRange.length; i += 2) {
-      const member = allCharactersInRange[i];
-      const score = parseFloat(allCharactersInRange[i + 1]);
+      const member = String(allCharactersInRange[i]);
+      const score = parseFloat(String(allCharactersInRange[i + 1]));
       
       // Check if score is within ELO range
       if (score >= characterElo - eloRange && score <= characterElo + eloRange) {
@@ -178,8 +179,8 @@ export async function POST(request: NextRequest) {
       // Convert array format to object format
       const otherCharactersArray: Array<ScoreMember> = [];
       for (let i = 0; i < allCharacters.length; i += 2) {
-        const member = allCharacters[i];
-        const score = parseFloat(allCharacters[i + 1]);
+        const member = String(allCharacters[i]);
+        const score = parseFloat(String(allCharacters[i + 1]));
         
         if (!userCharacters.includes(member) && member !== characterId) {
           otherCharactersArray.push({

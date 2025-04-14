@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
     // Convert array format to object format
     const characterScores: Array<ScoreMember> = [];
     for (let i = 0; i < rankingResults.length; i += 2) {
-      const member = rankingResults[i];
-      const score = parseFloat(rankingResults[i + 1]);
+      const member = String(rankingResults[i]);
+      const score = parseFloat(String(rankingResults[i + 1]));
       characterScores.push({
         member,
         score

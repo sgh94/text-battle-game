@@ -13,7 +13,9 @@ export async function POST(request: NextRequest) {
     }
 
     const userAddress = authResult.address;
-    const { name, traits } = await request.json();
+    const requestData = await request.json();
+    const name = requestData?.name as string;
+    const traits = requestData?.traits as string;
 
     // Basic validation
     if (!name || !traits) {

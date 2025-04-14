@@ -1,14 +1,14 @@
 // Common types used throughout the application
 
 // User data stored in KV
-export interface User {
+export interface User extends Record<string, unknown> {
   address: string;
   createdAt: number;
   lastLogin: number;
 }
 
 // Character data stored in KV
-export interface Character {
+export interface Character extends Record<string, unknown> {
   id: string;
   owner: string;
   name: string;
@@ -21,7 +21,7 @@ export interface Character {
 }
 
 // Battle result stored in KV
-export interface Battle {
+export interface Battle extends Record<string, unknown> {
   id: string;
   character1: string;
   character2: string;
@@ -42,4 +42,15 @@ export interface BattleResult {
 export interface UpdatedStats {
   winner: Character;
   loser: Character;
+}
+
+// KV specific types
+export interface ScoreMember {
+  score: number;
+  member: string;
+}
+
+export interface RankingResult {
+  member: string;
+  score: number;
 }

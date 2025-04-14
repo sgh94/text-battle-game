@@ -8,6 +8,11 @@ import {
   useSignMessage
 } from 'wagmi';
 import { useWalletErrorState, useAuthenticatingState } from '@/lib/atoms/wallet';
+import { createDevAuthToken } from '@/lib/auth';
+
+// Token cache to store valid auth tokens (to reduce signature requests)
+const AUTH_TOKEN_CACHE_KEY = 'text-battle-auth-token';
+const AUTH_TOKEN_EXPIRY_KEY = 'text-battle-auth-expiry';
 
 interface Web3ContextType {
   address: `0x${string}` | undefined;
@@ -33,6 +38,9 @@ const Web3Context = createContext<Web3ContextType>({
 
 export const useWeb3 = () => useContext(Web3Context);
 
+// Check if dev mode is enabled
+const isDev = process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_USE_DEV_AUTH === 'true';
+
 export function Web3Provider({ children }: { children: ReactNode }) {
   const { address, isConnected, isConnecting: isAccountConnecting, connector: activeConnector } = useAccount();
   const { connect, connectors, error: connectError, isPending: isWagmiConnecting } = useConnect();
@@ -42,6 +50,28 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const [authHeader, setAuthHeader] = useState<string | null>(null);
   const [appError, setAppError] = useWalletErrorState();
   const [isAuthenticating, setIsAuthenticating] = useAuthenticatingState();
+
+  // Load auth token from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const cachedToken = localStorage.getItem(AUTH_TOKEN_CACHE_KEY);
+      const expiryStr = localStorage.getItem(AUTH_TOKEN_EXPIRY_KEY);
+      
+      if (cachedToken && expiryStr) {
+        const expiry = parseInt(expiryStr);
+        
+        // Check if token is still valid
+        if (expiry > Date.now()) {
+          setAuthHeader(cachedToken);
+          console.log('Auth token loaded from cache');
+        } else {
+          // Clear expired token
+          localStorage.removeItem(AUTH_TOKEN_CACHE_KEY);
+          localStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+        }
+      }
+    }
+  }, []);
 
   // Attempt to auto-connect on initial load if Ethereum is available
   useEffect(() => {
@@ -107,6 +137,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     } else {
       localStorage.removeItem('connectedAddress');
       setAuthHeader(null);
+      localStorage.removeItem(AUTH_TOKEN_CACHE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
     }
   }, [isConnected, address]);
 
@@ -147,14 +179,49 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   }, [connectError, signError, setAppError]);
 
 
-  // 인증 헤더 생성 - 락 추가
+  // 인증 헤더 생성 - 락 추가 및 중복 서명 방지
   const generateAuthHeader = useCallback(async (walletAddress: `0x${string}`) => {
-    // 이미 인증 중이거나 헤더가 이미 있는 경우 중복 방지
-    if (isAuthenticating || authHeader) {
-      console.log("Authentication already in progress or already authenticated");
+    // 이미 인증 중이면 중복 방지
+    if (isAuthenticating) {
+      console.log("Authentication already in progress");
       return authHeader;
     }
+    
+    // 캐시에 저장된 유효한 토큰이 있는지 확인
+    const cachedToken = localStorage.getItem(AUTH_TOKEN_CACHE_KEY);
+    const expiryStr = localStorage.getItem(AUTH_TOKEN_EXPIRY_KEY);
+    
+    if (cachedToken && expiryStr) {
+      const expiry = parseInt(expiryStr);
+      
+      // 토큰이 아직 유효하면 재사용
+      if (expiry > Date.now()) {
+        if (!authHeader) {
+          setAuthHeader(cachedToken);
+          console.log("Using cached auth token");
+        }
+        return cachedToken;
+      } else {
+        // 만료된 토큰 제거
+        localStorage.removeItem(AUTH_TOKEN_CACHE_KEY);
+        localStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+      }
+    }
 
+    // 개발 모드에서는 서명 없는 개발용 토큰 사용 (옵션)
+    if (isDev) {
+      console.log("Using development auth token");
+      const devToken = createDevAuthToken(walletAddress);
+      setAuthHeader(devToken);
+      
+      // 토큰 캐싱 (30분)
+      const expiry = Date.now() + 30 * 60 * 1000;
+      localStorage.setItem(AUTH_TOKEN_CACHE_KEY, devToken);
+      localStorage.setItem(AUTH_TOKEN_EXPIRY_KEY, expiry.toString());
+      
+      return devToken;
+    }
+    
     setIsAuthenticating(true);
     setAppError(null);
     console.log("Attempting to generate auth header..."); // 함수 호출 확인
@@ -170,6 +237,12 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       const header = `Bearer ${walletAddress}:${timestamp}:${signature}`;
       setAuthHeader(header);
       console.log("Auth Header Generated:", header);
+      
+      // 토큰 캐싱 (30분)
+      const expiry = Date.now() + 30 * 60 * 1000;
+      localStorage.setItem(AUTH_TOKEN_CACHE_KEY, header);
+      localStorage.setItem(AUTH_TOKEN_EXPIRY_KEY, expiry.toString());
+      
       return header;
     } catch (error: any) { // 타입 명시
       console.error('Error generating auth header:', error);
@@ -254,18 +327,23 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   }, [connect, connectors, setAppError]);
 
 
-  // 사용자 생성 함수 (서버 API 호출)
+  // 사용자 생성 함수 (서버 API 호출) - 서명 횟수 최소화
   const createUser = useCallback(async (walletAddress: `0x${string}`) => {
-    // 함수 호출 시 에러 상태 초기화는 필요에 따라 결정 (generateAuthHeader 등 다른 작업에서도 에러 발생 가능)
-    // setAppError(null);
-    console.log("Attempting to create/verify user on server..."); // 함수 호출 확인
+    // 개발 모드에서는 더미 서명 사용
+    if (isDev) {
+      console.log("Development mode: Skip user creation/verification");
+      return true;
+    }
+    
+    console.log("Attempting to create/verify user on server...");
+    
     try {
       const timestamp = Date.now().toString();
       const message = `Register for Text Battle Game: ${timestamp}`;
 
-      console.log("Requesting signature for user creation/verification:", message); // 서명 요청 로그
+      console.log("Requesting signature for user creation/verification:", message);
       const signature = await signMessageAsync({ message });
-      console.log("Signature for user creation received:", signature); // 서명 완료 로그
+      console.log("Signature for user creation received:", signature);
 
       const response = await fetch('/api/user', {
         method: 'POST',
@@ -273,19 +351,19 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ address: walletAddress, message, signature }),
       });
 
-      console.log("Server response status:", response.status); // 서버 응답 상태 로그
+      console.log("Server response status:", response.status);
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: 'Failed to parse error response from server' })); // 에러 응답 파싱 실패 대비
-        console.error("Server error response:", data); // 서버 에러 상세 로그
+        const data = await response.json().catch(() => ({ error: 'Failed to parse error response from server' }));
+        console.error("Server error response:", data);
         throw new Error(data.error || `Server responded with status ${response.status}`);
       }
-      const responseData = await response.json(); // 성공 응답 데이터 확인 (선택 사항)
+      const responseData = await response.json();
       console.log("User created/verified successfully on server:", responseData);
       return true;
-    } catch (error: any) { // 타입 명시
+    } catch (error: any) {
       console.error('Error creating/verifying user:', error);
-      // 사용자가 거부한 경우 메시지 개선
+      
       if (error.message?.includes('User rejected the request')) {
         setAppError('Registration signature request was rejected by the user.');
       } else {
@@ -294,22 +372,27 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       }
       return false;
     }
-  }, [signMessageAsync, setAppError]); // 의존성 배열에 signMessageAsync 포함
+  }, [signMessageAsync, setAppError]);
 
 
-  // 지갑 연결 성공 후 처리
+  // 지갑 연결 성공 후 처리 (중복 요청 방지)
   useEffect(() => {
     // isConnected 상태가 true이고, address가 유효할 때만 실행
     if (isConnected && address) {
       console.log(`Wallet connection processed for address: ${address}`);
+      
+      // 이미 인증 중이거나 인증 헤더가 있으면 스킵
+      if (isAuthenticating || authHeader) {
+        return;
+      }
+      
       // 연결 시 사용자 생성/확인 및 인증 헤더 생성을 비동기로 처리
       const handleConnection = async () => {
         try {
           // 사용자 등록 시도
           await createUser(address);
           
-          // 사용자 등록 결과와 관계없이 인증 헤더 생성 시도 
-          // (인증 헤더가 없거나 인증 중이 아닐 때만)
+          // 인증 헤더 생성 시도
           if (!authHeader && !isAuthenticating) {
             await generateAuthHeader(address);
           }
@@ -317,6 +400,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           console.error("Error during post-connection setup:", error);
         }
       };
+      
       handleConnection();
     }
   }, [isConnected, address, createUser, generateAuthHeader, authHeader, isAuthenticating]); // 의존성 배열 확인
@@ -327,7 +411,12 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     setAppError(null); // 연결 해제 시 에러 초기화
     disconnect();
     setAuthHeader(null);
+    
+    // 캐시 클리어
     localStorage.removeItem('connectedAddress');
+    localStorage.removeItem(AUTH_TOKEN_CACHE_KEY);
+    localStorage.removeItem(AUTH_TOKEN_EXPIRY_KEY);
+    
     console.log("Wallet disconnected");
   }, [disconnect, setAppError]);
 
@@ -335,7 +424,6 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const value: Web3ContextType = {
     address,
     isConnected,
-    // isConnecting: isWagmiConnecting || isAccountConnecting || isSigning, // 여러 로딩 상태 조합 가능
     isConnecting: isWagmiConnecting || isAuthenticating, // Connection + authentication state
     connectWallet,
     disconnectWallet,

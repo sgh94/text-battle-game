@@ -2,59 +2,68 @@ import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAuth } from '@/lib/auth';
 import { decideBattleWinner } from '@/lib/battle';
+import { Battle, Character, UpdatedStats } from '@/types';
 
 // Get last battle time for cooldown check
-async function getLastBattleTime(userAddress: string) {
-  const lastBattle = await kv.get(`user:${userAddress}:lastBattle`);
+async function getLastBattleTime(userAddress: string): Promise<number> {
+  const lastBattle = await kv.get<number>(`user:${userAddress}:lastBattle`);
   return lastBattle || 0;
 }
 
 // Update ELO after battle
-async function updateElo(winnerId: string, loserId: string, isDraw: boolean) {
-  const winner = await kv.hgetall(`character:${winnerId}`);
-  const loser = await kv.hgetall(`character:${loserId}`);
+async function updateElo(winnerId: string, loserId: string, isDraw: boolean): Promise<UpdatedStats | undefined> {
+  const winner = await kv.hgetall<Character>(`character:${winnerId}`);
+  const loser = await kv.hgetall<Character>(`character:${loserId}`);
   
   if (!winner || !loser) return;
   
   // Basic ELO calculation
   const kFactor = 32;
-  const expectedScoreWinner = 1 / (1 + Math.pow(10, (loser.elo - winner.elo) / 400));
+  const winnerElo = typeof winner.elo === 'number' ? winner.elo : parseInt(winner.elo as unknown as string);
+  const loserElo = typeof loser.elo === 'number' ? loser.elo : parseInt(loser.elo as unknown as string);
+  const expectedScoreWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
   
-  let newWinnerElo, newLoserElo;
+  let newWinnerElo: number, newLoserElo: number;
   
   if (isDraw) {
     // Draw - each player gets 0.5 points
-    newWinnerElo = Math.round(winner.elo + kFactor * (0.5 - expectedScoreWinner));
-    newLoserElo = Math.round(loser.elo + kFactor * (0.5 - (1 - expectedScoreWinner)));
+    newWinnerElo = Math.round(winnerElo + kFactor * (0.5 - expectedScoreWinner));
+    newLoserElo = Math.round(loserElo + kFactor * (0.5 - (1 - expectedScoreWinner)));
     
     // Update stats
+    const winnerDraws = typeof winner.draws === 'number' ? winner.draws : parseInt(winner.draws as unknown as string) || 0;
+    const loserDraws = typeof loser.draws === 'number' ? loser.draws : parseInt(loser.draws as unknown as string) || 0;
+    
     await kv.hset(`character:${winnerId}`, {
       ...winner,
       elo: newWinnerElo,
-      draws: (parseInt(winner.draws) || 0) + 1
+      draws: winnerDraws + 1
     });
     
     await kv.hset(`character:${loserId}`, {
       ...loser,
       elo: newLoserElo,
-      draws: (parseInt(loser.draws) || 0) + 1
+      draws: loserDraws + 1
     });
   } else {
     // Win/loss - winner gets 1 point
-    newWinnerElo = Math.round(winner.elo + kFactor * (1 - expectedScoreWinner));
-    newLoserElo = Math.round(loser.elo + kFactor * (0 - (1 - expectedScoreWinner)));
+    newWinnerElo = Math.round(winnerElo + kFactor * (1 - expectedScoreWinner));
+    newLoserElo = Math.round(loserElo + kFactor * (0 - (1 - expectedScoreWinner)));
     
     // Update stats
+    const winnerWins = typeof winner.wins === 'number' ? winner.wins : parseInt(winner.wins as unknown as string) || 0;
+    const loserLosses = typeof loser.losses === 'number' ? loser.losses : parseInt(loser.losses as unknown as string) || 0;
+    
     await kv.hset(`character:${winnerId}`, {
       ...winner,
       elo: newWinnerElo,
-      wins: (parseInt(winner.wins) || 0) + 1
+      wins: winnerWins + 1
     });
     
     await kv.hset(`character:${loserId}`, {
       ...loser,
       elo: newLoserElo,
-      losses: (parseInt(loser.losses) || 0) + 1
+      losses: loserLosses + 1
     });
   }
   
@@ -64,9 +73,15 @@ async function updateElo(winnerId: string, loserId: string, isDraw: boolean) {
     { score: newLoserElo, member: loserId }
   ]);
   
+  // Get updated characters
+  const updatedWinner = await kv.hgetall<Character>(`character:${winnerId}`);
+  const updatedLoser = await kv.hgetall<Character>(`character:${loserId}`);
+  
+  if (!updatedWinner || !updatedLoser) return;
+  
   return {
-    winner: { ...winner, elo: newWinnerElo },
-    loser: { ...loser, elo: newLoserElo }
+    winner: updatedWinner,
+    loser: updatedLoser
   };
 }
 
@@ -87,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if character belongs to user
-    const userCharacters = await kv.smembers(`user:${userAddress}:characters`);
+    const userCharacters = await kv.smembers<string>(`user:${userAddress}:characters`);
     if (!userCharacters.includes(characterId)) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
@@ -106,20 +121,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Get character data
-    const character = await kv.hgetall(`character:${characterId}`);
+    const character = await kv.hgetall<Character>(`character:${characterId}`);
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
     // Find an opponent with similar ELO
-    const elo = parseInt(character.elo);
+    const characterElo = typeof character.elo === 'number' ? character.elo : parseInt(character.elo as unknown as string);
     const eloRange = 200; // Look for characters within +/- 200 ELO
     
     // Get characters within ELO range
-    const opponents = await kv.zrangebyscore(
+    const opponents = await kv.zrangebyscore<string>(
       'characters:ranking',
-      elo - eloRange,
-      elo + eloRange
+      characterElo - eloRange,
+      characterElo + eloRange
     );
     
     // Filter out the user's own characters
@@ -129,12 +144,12 @@ export async function POST(request: NextRequest) {
     
     if (possibleOpponents.length === 0) {
       // If no opponents in range, get closest ELO characters
-      const allCharacters = await kv.zrange('characters:ranking', 0, -1, { withScores: true });
+      const allCharacters = await kv.zrange<{member: string, score: number}>('characters:ranking', 0, -1, { withScores: true });
       
       // Filter out user's characters and sort by ELO difference
       const otherCharacters = allCharacters
         .filter((entry) => !userCharacters.includes(entry.member) && entry.member !== characterId)
-        .sort((a, b) => Math.abs(a.score - elo) - Math.abs(b.score - elo));
+        .sort((a, b) => Math.abs(a.score - characterElo) - Math.abs(b.score - characterElo));
       
       if (otherCharacters.length === 0) {
         return NextResponse.json({ error: 'No opponents available' }, { status: 404 });
@@ -142,7 +157,11 @@ export async function POST(request: NextRequest) {
       
       // Take the closest match
       const opponentId = otherCharacters[0].member;
-      const opponent = await kv.hgetall(`character:${opponentId}`);
+      const opponent = await kv.hgetall<Character>(`character:${opponentId}`);
+      
+      if (!opponent) {
+        return NextResponse.json({ error: 'Opponent not found' }, { status: 404 });
+      }
       
       // Determine battle outcome
       const result = await decideBattleWinner(character, opponent);
@@ -157,7 +176,7 @@ export async function POST(request: NextRequest) {
       
       // Store battle result
       const battleId = `battle:${Date.now()}`;
-      const battleResult = {
+      const battleResult: Battle = {
         id: battleId,
         character1: characterId,
         character2: opponentId,
@@ -188,7 +207,11 @@ export async function POST(request: NextRequest) {
       // Randomly select an opponent from the ELO range
       const randomIndex = Math.floor(Math.random() * possibleOpponents.length);
       const opponentId = possibleOpponents[randomIndex];
-      const opponent = await kv.hgetall(`character:${opponentId}`);
+      const opponent = await kv.hgetall<Character>(`character:${opponentId}`);
+      
+      if (!opponent) {
+        return NextResponse.json({ error: 'Opponent not found' }, { status: 404 });
+      }
       
       // Determine battle outcome
       const result = await decideBattleWinner(character, opponent);
@@ -203,7 +226,7 @@ export async function POST(request: NextRequest) {
       
       // Store battle result
       const battleId = `battle:${Date.now()}`;
-      const battleResult = {
+      const battleResult: Battle = {
         id: battleId,
         character1: characterId,
         character2: opponentId,
@@ -248,13 +271,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Either characterId or address is required' }, { status: 400 });
     }
     
-    let battleIds;
+    let battleIds: string[];
     if (characterId) {
       // Get battles for a specific character
-      battleIds = await kv.lrange(`character:${characterId}:battles`, 0, limit - 1);
-    } else {
+      battleIds = await kv.lrange<string>(`character:${characterId}:battles`, 0, limit - 1);
+    } else if (userAddress) {
       // Get battles for a user
-      battleIds = await kv.lrange(`user:${userAddress.toLowerCase()}:battles`, 0, limit - 1);
+      battleIds = await kv.lrange<string>(`user:${userAddress.toLowerCase()}:battles`, 0, limit - 1);
+    } else {
+      return NextResponse.json({ battles: [] });
     }
     
     if (!battleIds || battleIds.length === 0) {
@@ -264,12 +289,12 @@ export async function GET(request: NextRequest) {
     // Fetch all battles in parallel
     const battles = await Promise.all(
       battleIds.map(async (id) => {
-        const battle = await kv.hgetall(id);
+        const battle = await kv.hgetall<Battle>(id);
         return battle;
       })
     );
     
-    return NextResponse.json({ battles });
+    return NextResponse.json({ battles: battles.filter(battle => battle !== null) });
   } catch (error) {
     console.error('Error fetching battles:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

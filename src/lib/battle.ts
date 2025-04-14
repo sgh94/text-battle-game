@@ -1,18 +1,5 @@
 import axios from 'axios';
-
-interface Character {
-  id: string;
-  name: string;
-  traits: string;
-  elo: number;
-  [key: string]: any;
-}
-
-interface BattleResult {
-  winner: 'character1' | 'character2';
-  isDraw: boolean;
-  explanation: string;
-}
+import { Character, BattleResult } from '@/types';
 
 // Function to decide battle winner using Gemini LLM
 export async function decideBattleWinner(
@@ -36,8 +23,8 @@ export async function decideBattleWinner(
     const traits2 = character2.traits;
     
     // Calculate ELO probability
-    const elo1 = character1.elo;
-    const elo2 = character2.elo;
+    const elo1 = typeof character1.elo === 'number' ? character1.elo : parseInt(character1.elo as unknown as string);
+    const elo2 = typeof character2.elo === 'number' ? character2.elo : parseInt(character2.elo as unknown as string);
     const eloDiff = elo1 - elo2;
     const eloProbability = 1 / (1 + Math.pow(10, -eloDiff / 400));
     
@@ -159,7 +146,9 @@ function fallbackDecision(character1: Character, character2: Character): BattleR
   console.log('Using fallback battle decision logic.');
   
   // Determine winner based on ELO with some randomness
-  const eloDiff = character1.elo - character2.elo;
+  const elo1 = typeof character1.elo === 'number' ? character1.elo : parseInt(character1.elo as unknown as string);
+  const elo2 = typeof character2.elo === 'number' ? character2.elo : parseInt(character2.elo as unknown as string);
+  const eloDiff = elo1 - elo2;
   const eloProbability = 1 / (1 + Math.pow(10, -eloDiff / 400));
   const random = Math.random();
   

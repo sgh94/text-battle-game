@@ -29,19 +29,20 @@ export async function POST(request: NextRequest) {
 
     // Create user if it doesn't exist
     if (!user) {
-      user = {
+      const newUser: User = {
         address: address.toLowerCase(),
         createdAt: Date.now(),
         lastLogin: Date.now(),
       };
 
-      await kv.hset(`user:${address.toLowerCase()}`, user);
+      await kv.hset(`user:${address.toLowerCase()}`, newUser as Record<string, unknown>);
+      user = newUser;
     } else {
       // Update last login time
       await kv.hset(`user:${address.toLowerCase()}`, {
         ...user,
         lastLogin: Date.now(),
-      });
+      } as Record<string, unknown>);
     }
 
     return NextResponse.json({ success: true, user });

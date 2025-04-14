@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     };
 
     // Save character data
-    await kv.hset(`character:${characterId}`, character);
+    await kv.hset(`character:${characterId}`, character as Record<string, unknown>);
     
     // Add character to user's character list
     await kv.sadd(`user:${userAddress}:characters`, characterId);
@@ -82,13 +82,13 @@ export async function GET(request: NextRequest) {
 
     // Fetch all characters in parallel
     const characters = await Promise.all(
-      characterIds.map(async (id) => {
+      characterIds.map(async (id: string) => {
         const character = await kv.hgetall<Character>(`character:${id}`);
         return character;
       })
     );
 
-    return NextResponse.json({ characters: characters.filter(char => char !== null) });
+    return NextResponse.json({ characters: characters.filter((char): char is Character => char !== null) });
   } catch (error) {
     console.error('Error fetching characters:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

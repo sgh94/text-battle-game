@@ -41,6 +41,54 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   const [authHeader, setAuthHeader] = useState<string | null>(null);
   const [appError, setAppError] = useState<string | null>(null);
 
+  // Attempt to auto-connect on initial load if Ethereum is available
+  useEffect(() => {
+    // 이더리움 공급자가 있을 경우 즉시 연결 시도
+    const autoConnect = async () => {
+      try {
+        if (typeof window !== 'undefined' && window.ethereum) {
+          // 자동 연결 시도가 이미 진행 중인지 체크
+          if (!isWagmiConnecting && !isConnected) {
+            console.log("Attempting auto-connect with available provider");
+            
+            // 먼저 MetaMask 커넥터를 찾습니다
+            const metaMaskConnector = connectors.find(c => 
+              c.id === 'injected' && c.name === 'MetaMask' && c.ready
+            );
+            
+            // 또는 준비된 다른 커넥터를 찾습니다
+            const readyConnector = connectors.find(c => c.ready);
+            
+            if (metaMaskConnector) {
+              console.log("Auto-connecting with MetaMask");
+              connect({ connector: metaMaskConnector });
+            } else if (readyConnector) {
+              console.log("Auto-connecting with available connector:", readyConnector.name);
+              connect({ connector: readyConnector });
+            } else {
+              console.log("No ready connectors found for auto-connect");
+              // 커넥터를 직접 특정하여 강제 연결 시도
+              const anyConnector = connectors.find(c => c.id === 'injected');
+              if (anyConnector) {
+                console.log("Trying to connect with injected connector anyway");
+                connect({ connector: anyConnector });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Auto-connect error:", error);
+      }
+    };
+
+    // 페이지 로드 후 약간의 지연을 두고 자동 연결 시도
+    const timer = setTimeout(() => {
+      autoConnect();
+    }, 500); // 500ms 지연
+
+    return () => clearTimeout(timer);
+  }, [connect, connectors, isConnected, isWagmiConnecting]);
+
   // Log available connectors on mount for debugging
   useEffect(() => {
     console.log("Available connectors:", connectors.map(c => ({
@@ -146,35 +194,48 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     } 
     // 2. MetaMask connector 찾기
     else {
-      connector = connectors.find(c => c.id === 'injected' && c.name === 'MetaMask' && c.ready);
+      connector = connectors.find(c => c.id === 'injected' && c.name === 'MetaMask');
       
-      // 3. 'injected' 타입의 준비된 모든 connector 시도
+      // 3. 'injected' 타입의 커넥터 시도
       if (!connector) {
-        connector = connectors.find(c => c.id === 'injected' && c.ready);
+        connector = connectors.find(c => c.id === 'injected');
       }
       
       // 4. coinbaseWallet connector 시도
       if (!connector) {
-        connector = connectors.find(c => c.id === 'coinbaseWallet' && c.ready);
+        connector = connectors.find(c => c.id === 'coinbaseWallet');
       }
       
       // 5. walletConnect connector 시도
       if (!connector) {
-        connector = connectors.find(c => c.id === 'walletConnect' && c.ready);
+        connector = connectors.find(c => c.id === 'walletConnect');
       }
       
-      // 6. 사용 가능한 다른 모든 connector 시도
+      // 6. 그 외 모든 connector 시도
       if (!connector) {
-        connector = connectors.find(c => c.ready);
+        connector = connectors[0]; // 첫 번째 사용 가능한 커넥터 선택
       }
     }
 
     if (connector) {
-      console.log(`Connecting with ${connector.name}...`); // 연결 시도 로그
+      console.log(`Connecting with ${connector.name} (id: ${connector.id})`); // 연결 시도 로그
       connect({ connector });
     } else {
-      console.log("Available connectors:", connectors); // 로그 추가
-      setAppError("No suitable wallet connector found or ready. Please install MetaMask, ensure your wallet is unlocked, or use another supported wallet.");
+      console.log("No connectors available"); // 로그 추가
+      
+      // 브라우저에 이더리움 공급자가 있는지 확인
+      if (typeof window !== 'undefined' && window.ethereum) {
+        console.log("Found window.ethereum, but no matching connector");
+        
+        // 메타마스크 설치 여부 확인
+        if (window.ethereum.isMetaMask) {
+          setAppError("MetaMask is installed but not properly detected. Please refresh the page and try again.");
+        } else {
+          setAppError("A wallet is detected but not properly connected. Please refresh the page or try using a different browser.");
+        }
+      } else {
+        setAppError("No wallet detected. Please install MetaMask or another Web3 wallet extension.");
+      }
     }
   }, [connect, connectors]);
 

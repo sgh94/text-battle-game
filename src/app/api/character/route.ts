@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const characterIdsResponse = await kv.smembers(`user:${userAddress}:characters`);
     // Ensure characterIds is an array
     const characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
-    
+
     // Check if user already has 5 characters
     if (characterIds.length >= 5) {
       return NextResponse.json(
@@ -37,13 +37,13 @@ export async function POST(request: NextRequest) {
 
     // Create unique character ID
     const characterId = `${userAddress}_${Date.now()}`;
-    
+
     // Set initial ELO score
     const defaultElo = 1000;
-    
+
     const character: Character = {
       id: characterId,
-      owner: userAddress,
+      owner: userAddress!,
       name,
       traits,
       elo: defaultElo,
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     // Save character data
     await kv.hset(`character:${characterId}`, character as Record<string, unknown>);
-    
+
     // Add character to user's character list
     await kv.sadd(`user:${userAddress}:characters`, characterId);
 
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     const characterIdsResponse = await kv.smembers(`user:${address.toLowerCase()}:characters`);
     // Ensure characterIds is an array
     const characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
-    
+
     if (!characterIds || characterIds.length === 0) {
       return NextResponse.json({ characters: [] });
     }

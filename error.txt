@@ -1,0 +1,2 @@
+src/components/ConnectButton.tsx(7,47): error TS2339: Property 'connect' does not exist on type 'Web3ContextType'.
+src/components/ConnectButton.tsx(7,56): error TS2339: Property 'disconnect' does not exist on type 'Web3ContextType'.

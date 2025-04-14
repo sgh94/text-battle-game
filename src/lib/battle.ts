@@ -127,7 +127,8 @@ export async function decideBattleWinner(
       } else {
         // No content (potentially blocked by safety settings)
         console.warn('No content in API response. Check safety settings or prompt.');
-        console.warn('Block reason:', candidate.finishReason, candidate.safetyRatings);
+        if (candidate.finishReason) console.warn('Block reason:', candidate.finishReason);
+        if (candidate.safetyRatings) console.warn('Safety ratings:', candidate.safetyRatings);
         return fallbackDecision(character1, character2);
       }
     } else {
@@ -135,8 +136,15 @@ export async function decideBattleWinner(
       console.error('No valid candidates in API response:', response.data);
       return fallbackDecision(character1, character2);
     }
-  } catch (error) {
-    console.error('Error during LLM API call:', error.response ? error.response.data : error.message);
+  } catch (error: unknown) {
+    let errorMessage = 'Unknown error';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'object' && error !== null) {
+      errorMessage = String(error);
+    }
+    
+    console.error('Error during LLM API call:', errorMessage);
     return fallbackDecision(character1, character2);
   }
 }

@@ -2,7 +2,7 @@ import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAuth } from '@/lib/auth';
 import { decideBattleWinner } from '@/lib/battle';
-import { Battle, Character, UpdatedStats } from '@/types';
+import { Battle, Character, RankingResult, ScoreMember, UpdatedStats } from '@/types';
 
 // Get last battle time for cooldown check
 async function getLastBattleTime(userAddress: string): Promise<number> {
@@ -68,10 +68,13 @@ async function updateElo(winnerId: string, loserId: string, isDraw: boolean): Pr
   }
   
   // Update rankings
-  await kv.zadd('characters:ranking', [
-    { score: newWinnerElo, member: winnerId },
-    { score: newLoserElo, member: loserId }
-  ]);
+  await kv.zadd('characters:ranking', {
+    score: newWinnerElo,
+    member: winnerId,
+  }, {
+    score: newLoserElo,
+    member: loserId,
+  });
   
   // Get updated characters
   const updatedWinner = await kv.hgetall<Character>(`character:${winnerId}`);
@@ -130,26 +133,59 @@ export async function POST(request: NextRequest) {
     const characterElo = typeof character.elo === 'number' ? character.elo : parseInt(character.elo as unknown as string);
     const eloRange = 200; // Look for characters within +/- 200 ELO
     
-    // Get characters within ELO range
-    const opponents = await kv.zrangebyscore<string>(
-      'characters:ranking',
-      characterElo - eloRange,
-      characterElo + eloRange
-    );
+    // Use the range command instead since zrangebyscore isn't available
+    const allCharactersInRange = await kv.zrange<string>('characters:ranking', 0, -1, { withScores: true });
+    
+    if (!allCharactersInRange || !Array.isArray(allCharactersInRange)) {
+      return NextResponse.json({ error: 'Failed to find opponents' }, { status: 500 });
+    }
+    
+    // Convert array format to object format with member/score
+    const opponents: Array<ScoreMember> = [];
+    for (let i = 0; i < allCharactersInRange.length; i += 2) {
+      const member = allCharactersInRange[i];
+      const score = parseFloat(allCharactersInRange[i + 1]);
+      
+      // Check if score is within ELO range
+      if (score >= characterElo - eloRange && score <= characterElo + eloRange) {
+        opponents.push({
+          member,
+          score
+        });
+      }
+    }
     
     // Filter out the user's own characters
     const possibleOpponents = opponents.filter(
-      (id) => !userCharacters.includes(id) && id !== characterId
+      (opponentEntry) => !userCharacters.includes(opponentEntry.member) && opponentEntry.member !== characterId
     );
     
     if (possibleOpponents.length === 0) {
       // If no opponents in range, get closest ELO characters
-      const allCharacters = await kv.zrange<{member: string, score: number}>('characters:ranking', 0, -1, { withScores: true });
+      const allCharacters = await kv.zrange<string>('characters:ranking', 0, -1, { withScores: true });
       
-      // Filter out user's characters and sort by ELO difference
-      const otherCharacters = allCharacters
-        .filter((entry) => !userCharacters.includes(entry.member) && entry.member !== characterId)
-        .sort((a, b) => Math.abs(a.score - characterElo) - Math.abs(b.score - characterElo));
+      if (!allCharacters || !Array.isArray(allCharacters)) {
+        return NextResponse.json({ error: 'Failed to find opponents' }, { status: 500 });
+      }
+      
+      // Convert array format to object format
+      const otherCharactersArray: Array<ScoreMember> = [];
+      for (let i = 0; i < allCharacters.length; i += 2) {
+        const member = allCharacters[i];
+        const score = parseFloat(allCharacters[i + 1]);
+        
+        if (!userCharacters.includes(member) && member !== characterId) {
+          otherCharactersArray.push({
+            member,
+            score
+          });
+        }
+      }
+      
+      // Sort by ELO difference
+      const otherCharacters = otherCharactersArray.sort((a, b) => {
+        return Math.abs(a.score - characterElo) - Math.abs(b.score - characterElo);
+      });
       
       if (otherCharacters.length === 0) {
         return NextResponse.json({ error: 'No opponents available' }, { status: 404 });
@@ -206,7 +242,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Randomly select an opponent from the ELO range
       const randomIndex = Math.floor(Math.random() * possibleOpponents.length);
-      const opponentId = possibleOpponents[randomIndex];
+      const opponentId = possibleOpponents[randomIndex].member;
       const opponent = await kv.hgetall<Character>(`character:${opponentId}`);
       
       if (!opponent) {

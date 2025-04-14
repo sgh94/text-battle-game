@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get last battle time
-    const lastBattleTime = await kv.get(`user:${address.toLowerCase()}:lastBattle`) || 0;
+    const lastBattleTime = await kv.get<number>(`user:${address.toLowerCase()}:lastBattle`) || 0;
     
     // Calculate remaining cooldown in seconds
     const now = Date.now();

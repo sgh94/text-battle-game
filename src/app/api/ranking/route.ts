@@ -1,6 +1,6 @@
 import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
-import { Character } from '@/types';
+import { Character, ScoreMember } from '@/types';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,23 +8,37 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(request.nextUrl.searchParams.get('offset') || '0');
     
     // Get top characters by ELO
-    const rankingResults = await kv.zrange<{member: string, score: number}>(
+    const rankingResults = await kv.zrange<string>(
       'characters:ranking',
-      offset,
-      offset + limit - 1,
+      0,
+      -1,
       {
         rev: true, // Descending order
         withScores: true,
       }
     );
     
-    if (!rankingResults || rankingResults.length === 0) {
+    if (!rankingResults || !Array.isArray(rankingResults) || rankingResults.length === 0) {
       return NextResponse.json({ rankings: [] });
     }
     
+    // Convert array format to object format
+    const characterScores: Array<ScoreMember> = [];
+    for (let i = 0; i < rankingResults.length; i += 2) {
+      const member = rankingResults[i];
+      const score = parseFloat(rankingResults[i + 1]);
+      characterScores.push({
+        member,
+        score
+      });
+    }
+    
+    // Apply pagination
+    const paginatedScores = characterScores.slice(offset, offset + limit);
+    
     // Fetch character details
     const rankings = await Promise.all(
-      rankingResults.map(async (item, index) => {
+      paginatedScores.map(async (item, index) => {
         const characterId = item.member;
         const character = await kv.hgetall<Character>(`character:${characterId}`);
         

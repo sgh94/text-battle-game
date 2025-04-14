@@ -5,8 +5,8 @@ import { decideBattleWinner } from '@/lib/battle';
 import { Battle, Character, RankingResult, ScoreMember, UpdatedStats } from '@/types';
 
 // Get last battle time for cooldown check
-async function getLastBattleTime(userAddress: string): Promise<number> {
-  const lastBattle = await kv.get<number>(`user:${userAddress}:lastBattle`);
+async function getLastBattleTime(characterId: string): Promise<number> {
+  const lastBattle = await kv.get<number>(`character:${characterId}:lastBattle`);
   return lastBattle || 0;
 }
 
@@ -114,8 +114,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
-    // Check cooldown (3 minutes between battles)
-    const lastBattleTime = await getLastBattleTime(userAddress as string);
+    // Check cooldown (3 minutes between battles) - per character
+    const lastBattleTime = await getLastBattleTime(characterId);
     const now = Date.now();
     const cooldownPeriod = 3 * 60 * 1000; // 3 minutes in milliseconds
 
@@ -228,12 +228,13 @@ export async function POST(request: NextRequest) {
         isDraw: result.isDraw,
         explanation: result.explanation,
         timestamp: Date.now(),
+        narrative: result.explanation,
       };
 
       await kv.hset(battleId, battleResult as Record<string, unknown>);
 
-      // Update last battle time
-      await kv.set(`user:${userAddress}:lastBattle`, Date.now());
+      // Update last battle time for the character instead of the user
+      await kv.set(`character:${characterId}:lastBattle`, Date.now());
 
       // Add battle to user's battle history
       await kv.lpush(`user:${userAddress}:battles`, battleId);
@@ -278,12 +279,13 @@ export async function POST(request: NextRequest) {
         isDraw: result.isDraw,
         explanation: result.explanation,
         timestamp: Date.now(),
+        narrative: result.explanation,
       };
 
       await kv.hset(battleId, battleResult as Record<string, unknown>);
 
-      // Update last battle time
-      await kv.set(`user:${userAddress}:lastBattle`, Date.now());
+      // Update last battle time for the character instead of the user
+      await kv.set(`character:${characterId}:lastBattle`, Date.now());
 
       // Add battle to user's battle history
       await kv.lpush(`user:${userAddress}:battles`, battleId);

@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { User } from '@/types';
 
+// Mock database for local development (when KV is not available)
+const mockUserDb = new Map<string, User>();
+
 // Create a new user or retrieve existing user
 export async function POST(request: NextRequest) {
   try {
@@ -24,25 +27,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Signature verification failed' }, { status: 401 });
     }
 
-    // Check if user exists
-    let user = await kv.hgetall<User>(`user:${address.toLowerCase()}`);
+    const lowerCaseAddress = address.toLowerCase();
+    let user: User | null = null;
+
+    try {
+      // Try to get user from KV
+      user = await kv.hgetall<User>(`user:${lowerCaseAddress}`);
+    } catch (kvError) {
+      console.warn('KV database error, using mock database:', kvError);
+      // Fall back to mock database if KV fails
+      user = mockUserDb.get(lowerCaseAddress) || null;
+    }
 
     // Create user if it doesn't exist
     if (!user) {
       const newUser: User = {
-        address: address.toLowerCase(),
+        address: lowerCaseAddress,
         createdAt: Date.now(),
         lastLogin: Date.now(),
       };
 
-      await kv.hset(`user:${address.toLowerCase()}`, newUser as Record<string, unknown>);
+      try {
+        await kv.hset(`user:${lowerCaseAddress}`, newUser as Record<string, unknown>);
+      } catch (kvError) {
+        console.warn('KV database error on create, using mock database:', kvError);
+        // Fall back to mock database
+        mockUserDb.set(lowerCaseAddress, newUser);
+      }
+      
       user = newUser;
     } else {
       // Update last login time
-      await kv.hset(`user:${address.toLowerCase()}`, {
+      const updatedUser = {
         ...user,
         lastLogin: Date.now(),
-      } as Record<string, unknown>);
+      };
+      
+      try {
+        await kv.hset(`user:${lowerCaseAddress}`, updatedUser as Record<string, unknown>);
+      } catch (kvError) {
+        console.warn('KV database error on update, using mock database:', kvError);
+        // Fall back to mock database
+        mockUserDb.set(lowerCaseAddress, updatedUser);
+      }
+      
+      user = updatedUser;
     }
 
     return NextResponse.json({ success: true, user });
@@ -61,7 +90,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Address is required' }, { status: 400 });
     }
 
-    const user = await kv.hgetall<User>(`user:${address.toLowerCase()}`);
+    const lowerCaseAddress = address.toLowerCase();
+    let user: User | null = null;
+
+    try {
+      // Try to get user from KV
+      user = await kv.hgetall<User>(`user:${lowerCaseAddress}`);
+    } catch (kvError) {
+      console.warn('KV database error on get, using mock database:', kvError);
+      // Fall back to mock database
+      user = mockUserDb.get(lowerCaseAddress) || null;
+    }
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });

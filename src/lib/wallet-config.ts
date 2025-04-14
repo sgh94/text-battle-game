@@ -23,19 +23,19 @@ export const chains = [mainnet, sepolia, polygon, optimism, arbitrum, base];
 export const config = getDefaultConfig({
   appName: 'Text Battle Game',
   projectId: projectId,
-  chains: chains,
+  chains: chains as any,
   ssr: true, // SSR 지원 활성화
 });
 
 // WalletConnect metadata 설정 함수 - 동적 URL 생성
 export const getWalletConnectMetadata = () => {
   let url = 'https://text-battle-game.vercel.app';
-  
+
   // 브라우저 환경에서만 window 객체에 접근
   if (typeof window !== 'undefined') {
     url = window.location.origin;
   }
-  
+
   return {
     name: 'Text Battle Game',
     description: 'A web3-based text battle game with LLM decision making',

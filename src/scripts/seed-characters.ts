@@ -112,15 +112,15 @@ const aiCharacters: Omit<Character, 'id' | 'createdAt'>[] = [
 async function seedAICharacters() {
   try {
     console.log('AI 캐릭터 시드 프로세스 시작...');
-    
+
     // 서버에 요청할 기본 URL
     const baseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
-    
+
     // 가상의 서명 생성 (개발용 - 실제로는 검증 안 함)
     const timestamp = Date.now();
     const message = `Seed AI Characters: ${timestamp}`;
     const mockSignature = '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
-    
+
     // 관리자 계정 생성 (AI 캐릭터를 관리할 가상 계정)
     console.log('AI 관리자 계정 등록 중...');
     await fetch(`${baseUrl}/api/user`, {
@@ -134,31 +134,31 @@ async function seedAICharacters() {
         signature: mockSignature
       })
     });
-    
+
     // 각 AI 캐릭터 추가
     console.log('AI 캐릭터 생성 중...');
     for (const character of aiCharacters) {
       // 캐릭터 생성 시간을 랜덤하게 설정 (최근 1년 내)
       const randomDaysAgo = Math.floor(Math.random() * 365);
       const createdAt = Date.now() - (randomDaysAgo * 24 * 60 * 60 * 1000);
-      
+
       // 캐릭터 ID 생성
       const characterId = `${AI_BASE_ADDRESS}_${createdAt}`;
-      
+
       // 캐릭터 객체 완성
       const completeCharacter: Character = {
         ...character,
         id: characterId,
         createdAt
-      };
-      
+      } as Character;
+
       // API 엔드포인트에 직접 접근 (개발용으로만 사용)
       // 실제 프로덕션에서는 시드 스크립트가 더 안전한 방법으로 구현되어야 함
       console.log(`캐릭터 생성 중: ${completeCharacter.name}`);
-      
+
       // 인증 헤더 생성 (개발용 - 실제로는 검증 안 함)
       const authHeader = `Bearer ${AI_BASE_ADDRESS}:${timestamp}:${mockSignature}`;
-      
+
       // 캐릭터 API 호출
       const response = await fetch(`${baseUrl}/api/character/seed`, {
         method: 'POST',
@@ -168,7 +168,7 @@ async function seedAICharacters() {
         },
         body: JSON.stringify(completeCharacter)
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         console.error(`캐릭터 생성 실패: ${completeCharacter.name}`, error);
@@ -176,7 +176,7 @@ async function seedAICharacters() {
         console.log(`캐릭터 생성 성공: ${completeCharacter.name}`);
       }
     }
-    
+
     console.log('AI 캐릭터 시드 프로세스 완료!');
   } catch (error) {
     console.error('시드 프로세스 중 오류 발생:', error);

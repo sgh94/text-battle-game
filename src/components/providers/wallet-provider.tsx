@@ -7,7 +7,7 @@ import { FC, PropsWithChildren, useEffect, useState } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { useWagmiConfig, useUpdateWagmiConfig } from '@/lib/atoms/wallet';
-import { createWagmiConfig, defaultWagmiConfig } from '@/lib/wallet-config';
+import { createWagmiConfig, defaultWagmiConfig, chains } from '@/lib/wallet-config';
 
 // RainbowKit CSS import
 import '@rainbow-me/rainbowkit/styles.css';
@@ -77,6 +77,7 @@ const WalletProvider: FC<PropsWithChildren> = ({ children }) => {
           })}
           modalSize="compact"
           coolMode // 애니메이션 효과
+          chains={chains}
         >
           {children}
         </RainbowKitProvider>

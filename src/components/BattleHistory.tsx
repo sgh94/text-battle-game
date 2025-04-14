@@ -80,7 +80,7 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
   if (isLoading) {
     return (
       <div className="mt-8">
-        <h3 className="text-xl font-bold mb-4">배틀 히스토리</h3>
+        <h3 className="text-xl font-bold mb-4">Battle History</h3>
         <div className="flex justify-center my-4">
           <svg className="animate-spin h-6 w-6 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -93,7 +93,7 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
 
   return (
     <div className="mt-8">
-      <h3 className="text-xl font-bold mb-4">배틀 히스토리</h3>
+      <h3 className="text-xl font-bold mb-4">Battle History</h3>
       
       {battles.length === 0 ? (
         <div className="bg-gray-800 p-4 rounded-lg text-center">

@@ -1,0 +1,120 @@
+'use client';
+
+import { useState } from 'react';
+
+interface CreateCharacterModalProps {
+  authHeader: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export function CreateCharacterModal({
+  authHeader,
+  onClose,
+  onSuccess,
+}: CreateCharacterModalProps) {
+  const [name, setName] = useState('');
+  const [traits, setTraits] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!name.trim() || !traits.trim()) {
+      setError('Name and traits are required');
+      return;
+    }
+    
+    try {
+      setIsSubmitting(true);
+      setError('');
+      
+      const response = await fetch('/api/character', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': authHeader,
+        },
+        body: JSON.stringify({ name, traits }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create character');
+      }
+      
+      onSuccess();
+    } catch (error: any) {
+      setError(error.message || 'An error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+        <h2 className="text-xl font-bold mb-4">캐릭터 생성</h2>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label htmlFor="name" className="block text-sm font-medium mb-1">
+              캐릭터 이름
+            </label>
+            <input
+              type="text"
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Enter character name"
+            />
+          </div>
+          
+          <div className="mb-6">
+            <label htmlFor="traits" className="block text-sm font-medium mb-1">
+              캐릭터 특성
+            </label>
+            <textarea
+              id="traits"
+              value={traits}
+              onChange={(e) => setTraits(e.target.value)}
+              rows={4}
+              className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Describe your character's traits, abilities, and personality"
+            />
+          </div>
+          
+          {error && (
+            <div className="mb-4 text-red-500 text-sm">{error}</div>
+          )}
+          
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md flex items-center gap-2"
+            >
+              {isSubmitting && (
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              생성하기
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

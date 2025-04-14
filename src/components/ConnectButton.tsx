@@ -1,17 +1,40 @@
 'use client';
 
 import { useWeb3 } from '@/providers/Web3Provider';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function ConnectButton() {
-  const { address, isConnected, isConnecting, connect, disconnect } = useWeb3();
+  const { address, isConnected, isConnecting, connect, disconnect, error } = useWeb3();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Update local error state when context error changes
+  useEffect(() => {
+    if (error) {
+      setErrorMessage(error);
+      // Clear error after 5 seconds
+      const timer = setTimeout(() => setErrorMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const formatAddress = (addr: string) => {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
+  // Check if MetaMask is installed
+  const isMetaMaskInstalled = () => {
+    // @ts-ignore
+    return typeof window !== 'undefined' && typeof window.ethereum !== 'undefined';
+  };
+
   return (
-    <div className="flex justify-end mb-6">
+    <div className="flex flex-col items-end mb-6">
+      {errorMessage && (
+        <div className="mb-2 p-2 bg-red-600 text-white text-sm rounded-md">
+          {errorMessage}
+        </div>
+      )}
+      
       {isConnected ? (
         <div className="flex items-center gap-2">
           <span className="bg-green-500 rounded-full w-2 h-2"></span>
@@ -25,7 +48,13 @@ export function ConnectButton() {
         </div>
       ) : (
         <button
-          onClick={connect}
+          onClick={() => {
+            if (!isMetaMaskInstalled()) {
+              setErrorMessage('Please install MetaMask to connect');
+              return;
+            }
+            connect();
+          }}
           disabled={isConnecting}
           className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
         >

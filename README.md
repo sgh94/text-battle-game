@@ -9,6 +9,7 @@ A web3-based text battle game where characters fight based on their traits using
 3. Battle system that matches characters based on ELO score
 4. Battles are decided by an LLM based on character traits
 5. Character stats and battle history tracking
+6. 3-minute cooldown between battles
 
 ## Tech Stack
 
@@ -20,4 +21,74 @@ A web3-based text battle game where characters fight based on their traits using
 
 ## Getting Started
 
-See the development and deployment instructions below.
+### Prerequisites
+
+- Node.js 16.8 or later
+- Vercel account
+- OpenAI API key
+
+### Local Development
+
+1. Clone the repository
+```bash
+git clone https://github.com/sgh94/text-battle-game.git
+cd text-battle-game
+```
+
+2. Install dependencies
+```bash
+npm install
+```
+
+3. Create a `.env.local` file with the required environment variables:
+```
+KV_URL=your_kv_url
+KV_REST_API_TOKEN=your_kv_token
+KV_REST_API_READ_ONLY_TOKEN=your_read_only_token
+KV_REST_API_URL=your_kv_api_url
+REDIS_URL=your_redis_url
+OPENAI_API_KEY=your_openai_api_key
+```
+
+4. Run the development server
+```bash
+npm run dev
+```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+### Deployment
+
+This application is configured for deployment on Vercel:
+
+1. Push your code to a GitHub repository
+2. Import the project in Vercel
+3. Configure the environment variables in the Vercel dashboard
+4. Deploy
+
+## Project Structure
+
+```
+/src
+  /app - Next.js app router
+    /api - API routes
+    /account - Account page
+    /battle - Battle page
+    /character - Character details
+    /ranking - Ranking page
+  /components - React components
+  /lib - Utility functions
+  /providers - Context providers
+  /hooks - Custom React hooks
+```
+
+## API Routes
+
+- `/api/user` - User management
+- `/api/character` - Character management
+- `/api/battle` - Battle system
+- `/api/ranking` - Ranking system
+
+## License
+
+MIT

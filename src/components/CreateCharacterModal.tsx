@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useWeb3 } from '@/providers/Web3Provider';
 
 interface CreateCharacterModalProps {
   authHeader: string;
@@ -13,10 +14,19 @@ export function CreateCharacterModal({
   onClose,
   onSuccess,
 }: CreateCharacterModalProps) {
+  const { signAuthMessage } = useWeb3();
   const [name, setName] = useState('');
   const [traits, setTraits] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [currentAuthHeader, setCurrentAuthHeader] = useState(authHeader);
+
+  // authHeader가 변경되면 현재 state 업데이트
+  useEffect(() => {
+    if (authHeader) {
+      setCurrentAuthHeader(authHeader);
+    }
+  }, [authHeader]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +34,23 @@ export function CreateCharacterModal({
     if (!name.trim() || !traits.trim()) {
       setError('Name and traits are required');
       return;
+    }
+    
+    // 인증 헤더가 없으면 다시 생성 시도
+    let header = currentAuthHeader;
+    if (!header) {
+      try {
+        const newAuthHeader = await signAuthMessage();
+        if (!newAuthHeader) {
+          setError('Failed to authenticate. Please try again.');
+          return;
+        }
+        header = newAuthHeader;
+        setCurrentAuthHeader(newAuthHeader);
+      } catch (error: any) {
+        setError(error?.message || 'Authentication failed');
+        return;
+      }
     }
     
     try {
@@ -34,7 +61,7 @@ export function CreateCharacterModal({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authHeader,
+          'Authorization': header,
         },
         body: JSON.stringify({ name, traits }),
       });
@@ -42,6 +69,16 @@ export function CreateCharacterModal({
       const data = await response.json();
       
       if (!response.ok) {
+        // 인증 오류일 경우 새로운 헤더 생성 시도
+        if (response.status === 401) {
+          const newHeader = await signAuthMessage();
+          if (newHeader) {
+            setCurrentAuthHeader(newHeader);
+            throw new Error('Authentication expired. Please try again.');
+          } else {
+            throw new Error('Failed to re-authenticate. Please reconnect your wallet.');
+          }
+        }
         throw new Error(data.error || 'Failed to create character');
       }
       

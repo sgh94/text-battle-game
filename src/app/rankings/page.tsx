@@ -27,11 +27,11 @@ export default function Rankings() {
     try {
       setIsLoading(true);
       const response = await fetch('/api/ranking?limit=10');
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch rankings');
       }
-      
+
       const data = await response.json();
       setTopCharacters(data.rankings || []);
     } catch (error) {
@@ -44,14 +44,14 @@ export default function Rankings() {
 
   return (
     <main className="flex min-h-screen flex-col items-center p-4 md:p-8 pb-20">
-      <h1 className="text-3xl font-bold mb-2">텍스트 배틀</h1>
-      <h2 className="text-xl font-medium mb-6">전체 랭킹 TOP 10</h2>
-      
+      <h1 className="text-3xl font-bold mb-2">Text Battle</h1>
+      <h2 className="text-xl font-medium mb-6">Total Rankings TOP 10</h2>
+
       <div className="w-full max-w-2xl">
         <div className="mb-4">
-          <Link href="/" className="text-blue-400 hover:underline">&larr; 메인으로 돌아가기</Link>
+          <Link href="/" className="text-blue-400 hover:underline">&larr; Back to Main</Link>
         </div>
-        
+
         {isLoading ? (
           <div className="flex justify-center my-8">
             <svg className="animate-spin h-8 w-8 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

@@ -8,7 +8,7 @@ export async function decideBattleWinner(
 ): Promise<BattleResult> {
   // Get Gemini API key from environment variables
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-  const GEMINI_MODEL_NAME = 'gemini-1.5-pro-latest';
+  const GEMINI_MODEL_NAME = 'gemini-2.0-flash-latest';
 
   if (!GEMINI_API_KEY) {
     console.warn('Gemini API key not provided or invalid. Using fallback logic.');

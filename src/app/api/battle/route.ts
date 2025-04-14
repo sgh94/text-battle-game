@@ -1,19 +1,94 @@
 import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAuth } from '@/lib/auth';
-import { Battle, BattleResult, Character } from '@/types';
-import { aiCharacters } from '@/scripts/seed-characters';
+import { decideBattleWinner } from '@/lib/battle';
+import { Battle, Character, RankingResult, ScoreMember, UpdatedStats } from '@/types';
 
-// Mock database for local development
-const mockCharacterDb = new Map<string, Character>();
-const mockBattleDb = new Map<string, Battle>();
-const mockCharacterRankings = new Map<string, number>();
-const mockUserBattles = new Map<string, string[]>();
+// Get last battle time for cooldown check
+async function getLastBattleTime(userAddress: string): Promise<number> {
+  const lastBattle = await kv.get<number>(`user:${userAddress}:lastBattle`);
+  return lastBattle || 0;
+}
 
-// AI 캐릭터 베이스 주소
-const AI_BASE_ADDRESS = '0xAI00000000000000000000000000000000000000';
+// Update ELO after battle
+async function updateElo(winnerId: string, loserId: string, isDraw: boolean): Promise<UpdatedStats | undefined> {
+  const winner = await kv.hgetall<Character>(`character:${winnerId}`);
+  const loser = await kv.hgetall<Character>(`character:${loserId}`);
 
-// Start a new battle
+  if (!winner || !loser) return;
+
+  // Basic ELO calculation
+  const kFactor = 32;
+  const winnerElo = typeof winner.elo === 'number' ? winner.elo : parseInt(winner.elo as unknown as string);
+  const loserElo = typeof loser.elo === 'number' ? loser.elo : parseInt(loser.elo as unknown as string);
+  const expectedScoreWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
+
+  let newWinnerElo: number, newLoserElo: number;
+
+  if (isDraw) {
+    // Draw - each player gets 0.5 points
+    newWinnerElo = Math.round(winnerElo + kFactor * (0.5 - expectedScoreWinner));
+    newLoserElo = Math.round(loserElo + kFactor * (0.5 - (1 - expectedScoreWinner)));
+
+    // Update stats
+    const winnerDraws = typeof winner.draws === 'number' ? winner.draws : parseInt(winner.draws as unknown as string) || 0;
+    const loserDraws = typeof loser.draws === 'number' ? loser.draws : parseInt(loser.draws as unknown as string) || 0;
+
+    await kv.hset(`character:${winnerId}`, {
+      ...winner,
+      elo: newWinnerElo,
+      draws: winnerDraws + 1
+    });
+
+    await kv.hset(`character:${loserId}`, {
+      ...loser,
+      elo: newLoserElo,
+      draws: loserDraws + 1
+    });
+  } else {
+    // Win/loss - winner gets 1 point
+    newWinnerElo = Math.round(winnerElo + kFactor * (1 - expectedScoreWinner));
+    newLoserElo = Math.round(loserElo + kFactor * (0 - (1 - expectedScoreWinner)));
+
+    // Update stats
+    const winnerWins = typeof winner.wins === 'number' ? winner.wins : parseInt(winner.wins as unknown as string) || 0;
+    const loserLosses = typeof loser.losses === 'number' ? loser.losses : parseInt(loser.losses as unknown as string) || 0;
+
+    await kv.hset(`character:${winnerId}`, {
+      ...winner,
+      elo: newWinnerElo,
+      wins: winnerWins + 1
+    });
+
+    await kv.hset(`character:${loserId}`, {
+      ...loser,
+      elo: newLoserElo,
+      losses: loserLosses + 1
+    });
+  }
+
+  // Update rankings
+  await kv.zadd('characters:ranking', {
+    score: newWinnerElo,
+    member: winnerId,
+  }, {
+    score: newLoserElo,
+    member: loserId,
+  });
+
+  // Get updated characters
+  const updatedWinner = await kv.hgetall<Character>(`character:${winnerId}`);
+  const updatedLoser = await kv.hgetall<Character>(`character:${loserId}`);
+
+  if (!updatedWinner || !updatedLoser) return;
+
+  return {
+    winner: updatedWinner,
+    loser: updatedLoser
+  };
+}
+
+// Start a battle
 export async function POST(request: NextRequest) {
   try {
     // Validate authentication
@@ -23,478 +98,249 @@ export async function POST(request: NextRequest) {
     }
 
     const userAddress = authResult.address;
-    const { characterId } = await request.json();
+    const requestData = await request.json();
+    const characterId = requestData?.characterId as string;
 
-    // Validate character ID
     if (!characterId) {
       return NextResponse.json({ error: 'Character ID is required' }, { status: 400 });
     }
 
-    // Get user's character
-    let userCharacter: Character | null = null;
-    try {
-      userCharacter = await kv.hgetall<Character>(`character:${characterId}`);
-    } catch (kvError) {
-      console.warn('KV database error on fetching character, using mock database:', kvError);
-      userCharacter = mockCharacterDb.get(characterId) || null;
-    }
+    // Check if character belongs to user
+    const userCharactersResponse = await kv.smembers(`user:${userAddress}:characters`);
+    // Ensure userCharacters is an array
+    const userCharacters = Array.isArray(userCharactersResponse) ? userCharactersResponse : [userCharactersResponse].filter(Boolean);
 
-    // Verify character exists and belongs to user
-    if (!userCharacter) {
+    if (!userCharacters.includes(characterId)) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
-    if (userCharacter.owner.toLowerCase() !== userAddress!.toLowerCase()) {
-      return NextResponse.json({ error: 'Not authorized to use this character' }, { status: 403 });
-    }
-
-    // Check cooldown
-    const lastBattleTime = await getLastBattleTime(characterId);
-    const cooldownPeriod = 3 * 60 * 1000; // 3 minutes
+    // Check cooldown (3 minutes between battles)
+    const lastBattleTime = await getLastBattleTime(userAddress as string);
     const now = Date.now();
+    const cooldownPeriod = 3 * 60 * 1000; // 3 minutes in milliseconds
 
-    if (lastBattleTime && now - lastBattleTime < cooldownPeriod) {
-      const remainingTime = Math.ceil((lastBattleTime + cooldownPeriod - now) / 1000);
+    if (now - lastBattleTime < cooldownPeriod) {
+      const remainingTime = Math.ceil((cooldownPeriod - (now - lastBattleTime)) / 1000);
+      return NextResponse.json(
+        { error: `Cooldown period active. Try again in ${remainingTime} seconds` },
+        { status: 429 }
+      );
+    }
+
+    // Get character data
+    const character = await kv.hgetall<Character>(`character:${characterId}`);
+    if (!character) {
+      return NextResponse.json({ error: 'Character not found' }, { status: 404 });
+    }
+
+    // Find an opponent with similar ELO
+    const characterElo = typeof character.elo === 'number' ? character.elo : parseInt(character.elo as unknown as string);
+    const eloRange = 200; // Look for characters within +/- 200 ELO
+
+    // Use the range command instead
+    const allCharactersResponse = await kv.zrange('characters:ranking', 0, -1, { withScores: true });
+    // Ensure allCharactersInRange is an array
+    const allCharactersInRange = Array.isArray(allCharactersResponse) ? allCharactersResponse : [];
+
+    if (!allCharactersInRange || allCharactersInRange.length === 0) {
+      return NextResponse.json({ error: 'Failed to find opponents' }, { status: 500 });
+    }
+
+    // Convert array format to object format with member/score
+    const opponents: Array<ScoreMember> = [];
+    for (let i = 0; i < allCharactersInRange.length; i += 2) {
+      const member = String(allCharactersInRange[i]);
+      const score = parseFloat(String(allCharactersInRange[i + 1]));
+
+      // Check if score is within ELO range
+      if (score >= characterElo - eloRange && score <= characterElo + eloRange) {
+        opponents.push({
+          member,
+          score
+        });
+      }
+    }
+
+    // Filter out the user's own characters
+    const possibleOpponents = opponents.filter(
+      (opponentEntry) => !userCharacters.includes(opponentEntry.member) && opponentEntry.member !== characterId
+    );
+
+    if (possibleOpponents.length === 0) {
+      // If no opponents in range, get closest ELO characters
+      const allCharactersResponse = await kv.zrange('characters:ranking', 0, -1, { withScores: true });
+      // Ensure allCharacters is an array
+      const allCharacters = Array.isArray(allCharactersResponse) ? allCharactersResponse : [];
+
+      if (!allCharacters || allCharacters.length === 0) {
+        return NextResponse.json({ error: 'Failed to find opponents' }, { status: 500 });
+      }
+
+      // Convert array format to object format
+      const otherCharactersArray: Array<ScoreMember> = [];
+      for (let i = 0; i < allCharacters.length; i += 2) {
+        const member = String(allCharacters[i]);
+        const score = parseFloat(String(allCharacters[i + 1]));
+
+        if (!userCharacters.includes(member) && member !== characterId) {
+          otherCharactersArray.push({
+            member,
+            score
+          });
+        }
+      }
+
+      // Sort by ELO difference
+      const otherCharacters = otherCharactersArray.sort((a, b) => {
+        return Math.abs(a.score - characterElo) - Math.abs(b.score - characterElo);
+      });
+
+      if (otherCharacters.length === 0) {
+        return NextResponse.json({ error: 'No opponents available' }, { status: 404 });
+      }
+
+      // Take the closest match
+      const opponentId = otherCharacters[0].member;
+      const opponent = await kv.hgetall<Character>(`character:${opponentId}`);
+
+      if (!opponent) {
+        return NextResponse.json({ error: 'Opponent not found' }, { status: 404 });
+      }
+
+      // Determine battle outcome
+      const result = await decideBattleWinner(character, opponent);
+
+      // Update ELO and stats
+      let updatedStats;
+      if (result.winner === 'character1') {
+        updatedStats = await updateElo(characterId, opponentId, result.isDraw);
+      } else {
+        updatedStats = await updateElo(opponentId, characterId, result.isDraw);
+      }
+
+      // Store battle result
+      const battleId = `battle:${Date.now()}`;
+      const battleResult: Battle = {
+        id: battleId,
+        character1: characterId,
+        character2: opponentId,
+        winner: result.winner === 'character1' ? characterId : opponentId,
+        isDraw: result.isDraw,
+        explanation: result.explanation,
+        timestamp: Date.now(),
+      };
+
+      await kv.hset(battleId, battleResult as Record<string, unknown>);
+
+      // Update last battle time
+      await kv.set(`user:${userAddress}:lastBattle`, Date.now());
+
+      // Add battle to user's battle history
+      await kv.lpush(`user:${userAddress}:battles`, battleId);
+
+      // Add battle to character's battle history
+      await kv.lpush(`character:${characterId}:battles`, battleId);
+      await kv.lpush(`character:${opponentId}:battles`, battleId);
+
       return NextResponse.json({
-        error: `Character is on cooldown`,
-        remainingTime
-      }, { status: 429 });
-    }
-
-    // Find opponent based on ELO score
-    const opponentCharacter = await findOpponent(userCharacter);
-
-    if (!opponentCharacter) {
-      return NextResponse.json({ error: 'No suitable opponent found' }, { status: 404 });
-    }
-
-    // Determine battle outcome
-    const battleResult = await decideBattle(userCharacter, opponentCharacter);
-
-    // Create battle record
-    const battleId = `battle_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-    let isDraw = battleResult.isDraw;
-    let winnerCharacterId = battleResult.winner === 'character1' ? userCharacter.id : opponentCharacter.id;
-
-    if (isDraw) {
-      winnerCharacterId = 'draw';
-    }
-
-    const battle: Battle = {
-      id: battleId,
-      character1: userCharacter.id,
-      character2: opponentCharacter.id,
-      winner: winnerCharacterId,
-      isDraw,
-      explanation: battleResult.explanation,
-      timestamp: now
-    };
-
-    // Update character stats
-    let updatedUserCharacter = { ...userCharacter };
-    let updatedOpponentCharacter = { ...opponentCharacter };
-
-    if (isDraw) {
-      // Draw: Slight ELO adjustments
-      updatedUserCharacter.draws = (updatedUserCharacter.draws || 0) + 1;
-      updatedOpponentCharacter.draws = (updatedOpponentCharacter.draws || 0) + 1;
-
-      // Small ELO changes for draws
-      const eloChange = 5;
-      if (updatedUserCharacter.elo < updatedOpponentCharacter.elo) {
-        updatedUserCharacter.elo += eloChange;
-        updatedOpponentCharacter.elo -= eloChange;
-      } else if (updatedUserCharacter.elo > updatedOpponentCharacter.elo) {
-        updatedUserCharacter.elo -= eloChange;
-        updatedOpponentCharacter.elo += eloChange;
-      }
-      // If ELO is equal, no change
+        success: true,
+        battle: battleResult,
+        updatedStats,
+      });
     } else {
-      // Win/Loss: Update stats and ELO
-      const winner = battleResult.winner === 'character1' ? updatedUserCharacter : updatedOpponentCharacter;
-      const loser = battleResult.winner === 'character1' ? updatedOpponentCharacter : updatedUserCharacter;
+      // Randomly select an opponent from the ELO range
+      const randomIndex = Math.floor(Math.random() * possibleOpponents.length);
+      const opponentId = possibleOpponents[randomIndex].member;
+      const opponent = await kv.hgetall<Character>(`character:${opponentId}`);
 
-      winner.wins = (winner.wins || 0) + 1;
-      loser.losses = (loser.losses || 0) + 1;
-
-      // Calculate ELO change
-      const kFactor = 32; // Standard chess K-factor
-      const expectedWinProbability = 1 / (1 + Math.pow(10, (loser.elo - winner.elo) / 400));
-      const eloChange = Math.round(kFactor * (1 - expectedWinProbability));
-
-      winner.elo += eloChange;
-      loser.elo -= eloChange;
-    }
-
-    // Save battle
-    try {
-      // Save battle record
-      await kv.hset(`battle:${battleId}`, battle as Record<string, unknown>);
-
-      // Add to user's battle list
-      await kv.sadd(`user:${userAddress}:battles`, battleId);
-
-      // Add to characters' battle lists
-      await kv.sadd(`character:${userCharacter.id}:battles`, battleId);
-      await kv.sadd(`character:${opponentCharacter.id}:battles`, battleId);
-
-      // Update user character
-      await kv.hset(`character:${userCharacter.id}`, updatedUserCharacter as Record<string, unknown>);
-
-      // Update opponent character if not AI
-      if (opponentCharacter.owner !== AI_BASE_ADDRESS) {
-        await kv.hset(`character:${opponentCharacter.id}`, updatedOpponentCharacter as Record<string, unknown>);
+      if (!opponent) {
+        return NextResponse.json({ error: 'Opponent not found' }, { status: 404 });
       }
 
-      // Update ELO rankings
-      await kv.zadd('characters:ranking', { score: updatedUserCharacter.elo, member: userCharacter.id });
-      await kv.zadd('characters:ranking', { score: updatedOpponentCharacter.elo, member: opponentCharacter.id });
-    } catch (kvError) {
-      console.warn('KV database error on saving battle, using mock database:', kvError);
+      // Determine battle outcome
+      const result = await decideBattleWinner(character, opponent);
 
-      // Fall back to mock database
-      mockBattleDb.set(battleId, battle);
-
-      // Add to user's battle list
-      const userBattles = mockUserBattles.get(userAddress!) || [];
-      userBattles.push(battleId);
-      mockUserBattles.set(userAddress!, userBattles);
-
-      // Update character in mock DB
-      mockCharacterDb.set(userCharacter.id, updatedUserCharacter);
-      if (opponentCharacter.owner !== AI_BASE_ADDRESS) {
-        mockCharacterDb.set(opponentCharacter.id, updatedOpponentCharacter);
+      // Update ELO and stats
+      let updatedStats;
+      if (result.winner === 'character1') {
+        updatedStats = await updateElo(characterId, opponentId, result.isDraw);
+      } else {
+        updatedStats = await updateElo(opponentId, characterId, result.isDraw);
       }
 
-      // Update ELO rankings
-      mockCharacterRankings.set(userCharacter.id, updatedUserCharacter.elo);
-      mockCharacterRankings.set(opponentCharacter.id, updatedOpponentCharacter.elo);
-    }
+      // Store battle result
+      const battleId = `battle:${Date.now()}`;
+      const battleResult: Battle = {
+        id: battleId,
+        character1: characterId,
+        character2: opponentId,
+        winner: result.winner === 'character1' ? characterId : opponentId,
+        isDraw: result.isDraw,
+        explanation: result.explanation,
+        timestamp: Date.now(),
+      };
 
-    return NextResponse.json({
-      success: true,
-      battle,
-      userCharacter: updatedUserCharacter,
-      opponentCharacter: updatedOpponentCharacter
-    });
+      await kv.hset(battleId, battleResult as Record<string, unknown>);
+
+      // Update last battle time
+      await kv.set(`user:${userAddress}:lastBattle`, Date.now());
+
+      // Add battle to user's battle history
+      await kv.lpush(`user:${userAddress}:battles`, battleId);
+
+      // Add battle to character's battle history
+      await kv.lpush(`character:${characterId}:battles`, battleId);
+      await kv.lpush(`character:${opponentId}:battles`, battleId);
+
+      return NextResponse.json({
+        success: true,
+        battle: battleResult,
+        updatedStats,
+      });
+    }
   } catch (error) {
-    console.error('Error in battle route:', error);
+    console.error('Error in battle:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// Get battle details
+// Get battle history for a user
 export async function GET(request: NextRequest) {
   try {
-    const battleId = request.nextUrl.searchParams.get('id');
     const characterId = request.nextUrl.searchParams.get('characterId');
+    const userAddress = request.nextUrl.searchParams.get('address');
+    const limit = parseInt(request.nextUrl.searchParams.get('limit') || '10');
 
-    if (battleId) {
-      // Get single battle details
-      let battle: Battle | null = null;
-
-      try {
-        battle = await kv.hgetall<Battle>(`battle:${battleId}`);
-      } catch (kvError) {
-        console.warn('KV database error on fetching battle, using mock database:', kvError);
-        battle = mockBattleDb.get(battleId) || null;
-      }
-
-      if (!battle) {
-        return NextResponse.json({ error: 'Battle not found' }, { status: 404 });
-      }
-
-      return NextResponse.json({ battle });
-    } else if (characterId) {
-      // Get battles for a character
-      let battleIds: string[] = [];
-
-      try {
-        const battleIdsResponse = await kv.smembers(`character:${characterId}:battles`);
-        // Ensure battleIds is an array
-        battleIds = Array.isArray(battleIdsResponse) ? battleIdsResponse : [battleIdsResponse].filter(Boolean);
-      } catch (kvError) {
-        console.warn('KV database error on fetching battle IDs, using mock database:', kvError);
-        // Get from mock DB - this part might need more implementation
-        battleIds = Array.from(mockBattleDb.entries())
-          .filter(([_, battle]) => battle.character1 === characterId || battle.character2 === characterId)
-          .map(([id, _]) => id);
-      }
-
-      if (!battleIds || battleIds.length === 0) {
-        return NextResponse.json({ battles: [] });
-      }
-
-      // Fetch all battles in parallel
-      const battles = await Promise.all(
-        battleIds.map(async (id: string) => {
-          let battle: Battle | null = null;
-
-          try {
-            battle = await kv.hgetall<Battle>(`battle:${id}`);
-          } catch (kvError) {
-            console.warn(`KV database error on fetching battle ${id}, using mock database:`, kvError);
-            battle = mockBattleDb.get(id) || null;
-          }
-
-          return battle;
-        })
-      );
-
-      return NextResponse.json({ battles: battles.filter((battle): battle is Battle => battle !== null) });
-    } else {
-      return NextResponse.json({ error: 'Battle ID or character ID is required' }, { status: 400 });
+    if (!characterId && !userAddress) {
+      return NextResponse.json({ error: 'Either characterId or address is required' }, { status: 400 });
     }
-  } catch (error) {
-    console.error('Error fetching battle:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
 
-// Helper function to get the time of the last battle for a character
-async function getLastBattleTime(characterId: string): Promise<number | null> {
-  try {
     let battleIds: string[] = [];
-
-    try {
-      const battleIdsResponse = await kv.smembers(`character:${characterId}:battles`);
-      // Ensure battleIds is an array
-      battleIds = Array.isArray(battleIdsResponse) ? battleIdsResponse : [battleIdsResponse].filter(Boolean);
-    } catch (kvError) {
-      console.warn('KV database error on fetching battle IDs for cooldown, using mock database:', kvError);
-      battleIds = Array.from(mockBattleDb.entries())
-        .filter(([_, battle]) => battle.character1 === characterId || battle.character2 === characterId)
-        .map(([id, _]) => id);
+    if (characterId) {
+      // Get battles for a specific character
+      const response = await kv.lrange(`character:${characterId}:battles`, 0, limit - 1);
+      battleIds = Array.isArray(response) ? response : [];
+    } else if (userAddress) {
+      // Get battles for a user
+      const response = await kv.lrange(`user:${userAddress.toLowerCase()}:battles`, 0, limit - 1);
+      battleIds = Array.isArray(response) ? response : [];
     }
 
     if (!battleIds || battleIds.length === 0) {
-      return null; // No previous battles
+      return NextResponse.json({ battles: [] });
     }
 
-    // Get timestamps of all battles
+    // Fetch all battles in parallel
     const battles = await Promise.all(
-      battleIds.map(async (id: string) => {
-        let battle: Battle | null = null;
-
-        try {
-          battle = await kv.hgetall<Battle>(`battle:${id}`);
-        } catch (kvError) {
-          console.warn(`KV database error on fetching battle ${id} for cooldown, using mock database:`, kvError);
-          battle = mockBattleDb.get(id) || null;
-        }
-
+      battleIds.map(async (id) => {
+        const battle = await kv.hgetall<Battle>(id);
         return battle;
       })
     );
 
-    // Find the most recent battle timestamp
-    const validBattles = battles.filter((battle): battle is Battle => battle !== null);
-    if (validBattles.length === 0) return null;
-
-    return Math.max(...validBattles.map(battle => battle.timestamp));
+    return NextResponse.json({ battles: battles.filter(battle => battle !== null) });
   } catch (error) {
-    console.error('Error getting last battle time:', error);
-    return null;
+    console.error('Error fetching battles:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-// Helper function to find an opponent based on ELO score
-async function findOpponent(userCharacter: Character): Promise<Character | null> {
-  try {
-    // ELO range to search (±100 initially, can be expanded if no opponent found)
-    let eloRange = 100;
-    let maxAttempts = 3;
-    let attempt = 0;
-    let opponentCharacter: Character | null = null;
-
-    while (!opponentCharacter && attempt < maxAttempts) {
-      // Find characters in ELO range
-      const minElo = userCharacter.elo - eloRange;
-      const maxElo = userCharacter.elo + eloRange;
-
-      let matchingCharacters: (Character | null)[] = [];
-
-      try {
-        // Get characters from KV based on ELO range
-        const rankedCharacterIds: string[] = await kv.zrange('characters:ranking', minElo, maxElo);
-
-        if (rankedCharacterIds && rankedCharacterIds.length > 0) {
-          // Fetch all potential opponents
-          matchingCharacters = await Promise.all(
-            rankedCharacterIds.map(async (id: string) => {
-              if (id === userCharacter.id) return null; // Skip user's own character
-
-              return await kv.hgetall<Character>(`character:${id}`);
-            })
-          );
-
-          // Filter out null values
-          matchingCharacters = matchingCharacters.filter((char): char is Character =>
-            char !== null && char.id !== userCharacter.id && char.owner.toLowerCase() !== userCharacter.owner.toLowerCase()
-          );
-        }
-      } catch (kvError) {
-        console.warn('KV database error on finding opponents, using mock database:', kvError);
-
-        // Fall back to mock database and filter by ELO
-        matchingCharacters = Array.from(mockCharacterDb.values()).filter(char =>
-          char.id !== userCharacter.id &&
-          char.owner.toLowerCase() !== userCharacter.owner.toLowerCase() &&
-          char.elo >= minElo && char.elo <= maxElo
-        );
-      }
-
-      // If no matching characters found, try AI characters if available
-      if (matchingCharacters.length === 0) {
-        // Check if we have any seeded AI characters
-        let aiChars: (Character | null)[] = [];
-
-        try {
-          const aiCharIds = await kv.smembers(`user:${AI_BASE_ADDRESS}:characters`);
-          if (aiCharIds && aiCharIds.length > 0) {
-            aiChars = await Promise.all(
-              aiCharIds.map(async (id: string) => await kv.hgetall<Character>(`character:${id}`))
-            );
-            aiChars = aiChars.filter((char): char is Character => char !== null);
-          }
-        } catch (kvError) {
-          console.warn('KV database error on finding AI opponents, using mock database:', kvError);
-
-          // If no seeded AI characters, create one from the predefined list
-          if (aiCharacters && aiCharacters.length > 0) {
-            // Pick a random AI character from the predefined list
-            const randomIndex = Math.floor(Math.random() * aiCharacters.length);
-            const randomAiChar = aiCharacters[randomIndex];
-
-            // Create a new AI character (this will be temporary and not saved)
-            const tempAiChar: Character = {
-              id: `ai_temp_${Date.now()}`,
-              owner: AI_BASE_ADDRESS,
-              name: randomAiChar.name as string,
-              traits: randomAiChar.traits as string,
-              elo: userCharacter.elo, // Match user's ELO for fair battle
-              wins: randomAiChar.wins as number,
-              losses: randomAiChar.losses as number,
-              draws: randomAiChar.draws as number,
-              createdAt: Date.now()
-            };
-
-            aiChars = [tempAiChar];
-          }
-        }
-
-        if (aiChars.length > 0) {
-          // Select a random AI character that's within ELO range
-          const eligibleAiChars = aiChars.filter(char =>
-            char !== null && char.elo >= minElo && char.elo <= maxElo
-          );
-
-          if (eligibleAiChars.length > 0) {
-            const randomIndex = Math.floor(Math.random() * eligibleAiChars.length);
-            opponentCharacter = eligibleAiChars[randomIndex];
-          } else if (aiChars.length > 0) {
-            // If no AI character in ELO range, adjust an AI character's ELO
-            const randomIndex = Math.floor(Math.random() * aiChars.length);
-            opponentCharacter = {
-              ...aiChars[randomIndex] as Character,
-              elo: userCharacter.elo // Adjust ELO to match user for a fair battle
-            };
-          }
-        }
-      } else {
-        // Select random opponent from matching characters
-        const randomIndex = Math.floor(Math.random() * matchingCharacters.length);
-        opponentCharacter = matchingCharacters[randomIndex];
-      }
-
-      // If still no opponent, expand the ELO range and try again
-      if (!opponentCharacter) {
-        eloRange += 100;
-        attempt++;
-      }
-    }
-
-    // If no opponent found after all attempts, create a temporary AI opponent
-    if (!opponentCharacter && aiCharacters && aiCharacters.length > 0) {
-      const randomIndex = Math.floor(Math.random() * aiCharacters.length);
-      const aiCharBase = aiCharacters[randomIndex];
-
-      opponentCharacter = {
-        id: `ai_temp_${Date.now()}`,
-        owner: AI_BASE_ADDRESS,
-        name: aiCharBase.name as string,
-        traits: aiCharBase.traits as string,
-        elo: userCharacter.elo, // Match user's ELO
-        wins: aiCharBase.wins as number,
-        losses: aiCharBase.losses as number,
-        draws: aiCharBase.draws as number,
-        createdAt: Date.now()
-      };
-    }
-
-    return opponentCharacter;
-  } catch (error) {
-    console.error('Error finding opponent:', error);
-    return null;
-  }
-}
-
-// Simple battle decision algorithm - for MVP only
-// In production, you'd use a more sophisticated LLM-based approach
-async function decideBattle(character1: Character, character2: Character): Promise<BattleResult> {
-  try {
-    // Random battle result for demo purposes
-    const randomValue = Math.random();
-
-    // Slightly favor the character with higher ELO (60/40 split)
-    const character1WinChance = character1.elo > character2.elo ? 0.6 : 0.4;
-
-    // 10% chance of a draw
-    if (randomValue < 0.1) {
-      return {
-        winner: 'character1', // Doesn't matter, isDraw is true
-        isDraw: true,
-        explanation: `${character1.name}과(와) ${character2.name}의 대결은 막상막하였습니다. 두 캐릭터는 각자의 능력을 최대한 발휘했지만, 어느 쪽도 우위를 점하지 못했습니다. 결국 무승부로 결정되었습니다.`
-      };
-    }
-
-    // Determine winner
-    const character1Wins = randomValue < character1WinChance + 0.1; // Adjusted for 10% draw chance
-
-    if (character1Wins) {
-      return {
-        winner: 'character1',
-        isDraw: false,
-        explanation: `${character1.name}이(가) ${character2.name}을(를) 상대로 승리했습니다! ${character1.name}의 ${getRandomTrait(character1.traits)}이(가) 결정적인 역할을 했습니다. ${character2.name}의 ${getRandomTrait(character2.traits)}에도 불구하고 이번 대결은 ${character1.name}의 승리로 끝났습니다.`
-      };
-    } else {
-      return {
-        winner: 'character2',
-        isDraw: false,
-        explanation: `${character2.name}이(가) ${character1.name}을(를) 상대로 승리했습니다! ${character2.name}의 ${getRandomTrait(character2.traits)}이(가) 결정적인 역할을 했습니다. ${character1.name}의 ${getRandomTrait(character1.traits)}에도 불구하고 이번 대결은 ${character2.name}의 승리로 끝났습니다.`
-      };
-    }
-  } catch (error) {
-    console.error('Error in battle decision:', error);
-
-    // Fallback result
-    return {
-      winner: Math.random() < 0.5 ? 'character1' : 'character2',
-      isDraw: false,
-      explanation: '두 캐릭터 간의 대결이 벌어졌습니다. 치열한 전투 끝에 승자가 결정되었습니다.'
-    };
-  }
-}
-
-// Helper function to extract a random trait from a character's traits description
-function getRandomTrait(traits: string): string {
-  const traitsList = traits.split(/[,.;]/).filter(trait => trait.trim().length > 0);
-
-  if (traitsList.length === 0) {
-    return '능력';
-  }
-
-  const randomIndex = Math.floor(Math.random() * traitsList.length);
-  return traitsList[randomIndex].trim();
 }

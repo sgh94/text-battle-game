@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     } catch (kvError) {
       console.warn('KV database error on fetching character IDs, using mock database:', kvError);
       // Fall back to mock database
-      characterIds = mockUserCharacterIds.get(userAddress!) || [];
+      characterIds = mockUserCharacterIds.get(userAddress) || [];
     }
 
     // Check if user already has 5 characters
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     const character: Character = {
       id: characterId,
-      owner: userAddress!,
+      owner: userAddress,
       name,
       traits,
       elo: defaultElo,
@@ -77,11 +77,11 @@ export async function POST(request: NextRequest) {
       console.warn('KV database error on character creation, using mock database:', kvError);
       // Fall back to mock database
       mockCharacterDb.set(characterId, character);
-
-      const userCharacters = mockUserCharacterIds.get(userAddress!) || [];
+      
+      const userCharacters = mockUserCharacterIds.get(userAddress) || [];
       userCharacters.push(characterId);
-      mockUserCharacterIds.set(userAddress!, userCharacters);
-
+      mockUserCharacterIds.set(userAddress, userCharacters);
+      
       mockCharacterRankings.set(characterId, defaultElo);
     }
 
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
     const characters = await Promise.all(
       characterIds.map(async (id: string) => {
         let character: Character | null = null;
-
+        
         try {
           character = await kv.hgetall<Character>(`character:${id}`);
         } catch (kvError) {
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
           // Fall back to mock database
           character = mockCharacterDb.get(id) || null;
         }
-
+        
         return character;
       })
     );

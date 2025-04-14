@@ -1,4 +1,5 @@
 import { connectorsForWallets } from '@rainbow-me/rainbowkit';
+import '@rainbow-me/rainbowkit/styles.css';
 import {
   argentWallet,
   braveWallet,
@@ -6,14 +7,24 @@ import {
   injectedWallet,
   ledgerWallet,
   metaMaskWallet,
-  okxWallet,
   safeWallet,
   trustWallet,
   walletConnectWallet,
   phantomWallet,
 } from '@rainbow-me/rainbowkit/wallets';
 import { createConfig, http } from 'wagmi';
-import { mainnet, sepolia } from 'wagmi/chains';
+import {
+  getDefaultConfig,
+  RainbowKitProvider,
+} from '@rainbow-me/rainbowkit';
+import { WagmiProvider } from 'wagmi';
+import {
+  mainnet,
+  polygon,
+  optimism,
+  arbitrum,
+  base,
+} from 'wagmi/chains';
 
 // 앱 정보 설정
 export const RainbowKitAppName = 'Text Battle Game';
@@ -22,47 +33,12 @@ export const RainbowKitAppName = 'Text Battle Game';
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'c8037616aed3334d648e7c7061ece6d7';
 
 // 지원할 체인 설정
-export const chains = [mainnet, sepolia];
-
-// RainbowKit 커넥터 생성 함수
-export const createRainbowKitConnectors = () => {
-  return connectorsForWallets([
-    {
-      groupName: '인기 지갑',
-      wallets: [
-        injectedWallet(),
-        metaMaskWallet({ projectId }),
-        coinbaseWallet({ 
-          appName: RainbowKitAppName
-        }),
-        walletConnectWallet({ projectId }),
-      ],
-    },
-    {
-      groupName: '기타 지갑',
-      wallets: [
-        okxWallet(),
-        phantomWallet(),
-        braveWallet(),
-        argentWallet({ projectId }),
-        trustWallet({ projectId }),
-        ledgerWallet({ projectId }),
-        safeWallet(),
-      ],
-    },
-  ]);
-};
+export const chains = [mainnet, polygon, optimism, arbitrum, base];
 
 // Wagmi 설정 생성 함수
-export const createWagmiConfig = () => {
-  return createConfig({
-    transports: {
-      [mainnet.id]: http(),
-      [sepolia.id]: http(),
-    },
-    connectors: createRainbowKitConnectors(),
-  });
-};
-
-// 기본 Wagmi 설정
-export const defaultWagmiConfig = createWagmiConfig();
+export const config = getDefaultConfig({
+  appName: 'Text Battle Game',
+  projectId: projectId,
+  chains: [mainnet, polygon, optimism, arbitrum, base],
+  ssr: false,
+});

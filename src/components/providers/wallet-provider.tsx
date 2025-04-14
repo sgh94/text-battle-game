@@ -7,7 +7,7 @@ import { FC, PropsWithChildren, useEffect, useState } from 'react';
 import { WagmiProvider } from 'wagmi';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { useWagmiConfig, useUpdateWagmiConfig } from '@/lib/atoms/wallet';
-import { createWagmiConfig, defaultWagmiConfig, chains } from '@/lib/wallet-config';
+import { config } from '@/lib/wallet-config';
 
 // RainbowKit CSS import
 import '@rainbow-me/rainbowkit/styles.css';
@@ -49,10 +49,10 @@ const WalletProvider: FC<PropsWithChildren> = ({ children }) => {
     try {
       // 커스텀 지갑 구성이 추가될 수 있음
       // 기본 설정 적용
-      updateWagmiConfig(defaultWagmiConfig);
+      updateWagmiConfig(config);
     } catch (error) {
       console.error('지갑 로딩 중 오류 발생:', error);
-      updateWagmiConfig(defaultWagmiConfig);
+      updateWagmiConfig(config);
     }
   };
 

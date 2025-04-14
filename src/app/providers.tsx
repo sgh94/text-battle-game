@@ -1,7 +1,7 @@
 // src/app/providers.tsx
 'use client'; // 이 파일은 클라이언트 컴포넌트입니다.
 
-import { useState, ReactNode, useEffect } from 'react'; 
+import { useState, ReactNode, useEffect } from 'react';
 import { WagmiProvider, createConfig, http } from 'wagmi';
 import { mainnet, sepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -17,13 +17,13 @@ const config = createConfig({
   chains: [mainnet, sepolia],
   connectors: [
     // MetaMask 및 기타 브라우저 지갑
-    injected({ 
+    injected({
       shimDisconnect: true,
       target: 'metaMask',
     }),
-    
+
     // WalletConnect
-    walletConnect({ 
+    walletConnect({
       projectId,
       showQrModal: true,
       metadata: {
@@ -33,12 +33,12 @@ const config = createConfig({
         icons: ['https://textbattle.example.com/icon.png']
       }
     }),
-    
+
     // Coinbase Wallet
-    coinbaseWallet({ 
-      appName: 'Text Battle Game', 
+    coinbaseWallet({
+      appName: 'Text Battle Game',
       appLogoUrl: '/logo.png',
-      darkMode: true 
+      darkMode: true
     }),
 
     // Phantom Wallet (Solana)
@@ -81,12 +81,12 @@ export default function Providers({ children }: { children: ReactNode }) {
   // 클라이언트 측에서만 queryClient 인스턴스 유지 (React Query v5 권장 방식)
   const queryClient = getQueryClient();
   const [mounted, setMounted] = useState(false);
-  
+
   // 마운트 상태 관리
   useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   // Ethereum Provider 상태 로깅
   useEffect(() => {
     if (typeof window !== 'undefined' && window.ethereum) {
@@ -95,22 +95,22 @@ export default function Providers({ children }: { children: ReactNode }) {
         selectedAddress: window.ethereum.selectedAddress,
         chainId: window.ethereum.chainId
       });
-      
+
       // MetaMask 상태 강제 새로고침 시도
       if (window.ethereum.isMetaMask) {
         const checkMetaMaskState = async () => {
           try {
             // 계정 접근 요청 (이미 연결된 경우 바로 반환)
-            await window.ethereum.request({ method: 'eth_accounts' });
+            await window.ethereum!.request!({ method: 'eth_accounts' });
             console.log("MetaMask account status checked");
           } catch (err) {
             console.error("Error checking MetaMask accounts:", err);
           }
         };
-        
+
         checkMetaMaskState();
       }
-      
+
       // 지갑 상태 변경 이벤트 리스닝
       const handleAccountsChanged = (accounts: string[]) => {
         console.log('Accounts changed:', accounts);
@@ -119,19 +119,19 @@ export default function Providers({ children }: { children: ReactNode }) {
           console.log("No accounts available, user may have disconnected");
         }
       };
-      
+
       const handleChainChanged = (chainId: string) => {
         console.log('Chain changed:', chainId);
         // 체인 변경 시 페이지 새로고침 (MetaMask 권장사항)
         window.location.reload();
       };
-      
+
       window.ethereum.on('accountsChanged', handleAccountsChanged);
       window.ethereum.on('chainChanged', handleChainChanged);
-      
+
       return () => {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
+        window.ethereum!.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum!.removeListener('chainChanged', handleChainChanged);
       };
     } else {
       console.log('No Ethereum provider found');

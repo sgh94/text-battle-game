@@ -1,9 +1,9 @@
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Config } from 'wagmi';
-import { defaultWagmiConfig } from '../wallet-config';
+import { config } from '../wallet-config';
 
 // Wagmi 설정을 저장할 atom
-const wagmiConfigAtom = atom<Config | null>(defaultWagmiConfig);
+const wagmiConfigAtom = atom<Config | null>(config);
 
 // Wagmi 설정을 가져오는 hook
 export const useWagmiConfig = () => useAtomValue(wagmiConfigAtom);

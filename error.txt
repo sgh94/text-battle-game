@@ -1,2 +1,22 @@
-src/components/ConnectButton.tsx(7,47): error TS2339: Property 'connect' does not exist on type 'Web3ContextType'.
-src/components/ConnectButton.tsx(7,56): error TS2339: Property 'disconnect' does not exist on type 'Web3ContextType'.
+src/common/atoms/wallet.ts(2,30): error TS2305: Module '"wagmi"' has no exported member 'Chain'.
+src/common/atoms/wallet.ts(2,37): error TS2724: '"wagmi"' has no exported member named 'WalletClient'. Did you mean 'useWalletClient'?
+src/common/atoms/wallet.ts(32,3): error TS2353: Object literal may only specify known properties, and 'chains' does not exist in type 'ConnectorsForWalletsParameters'.
+src/common/atoms/wallet.ts(37,17): error TS2554: Expected 0 arguments, but got 1.
+src/common/atoms/wallet.ts(42,3): error TS2322: Type 'Chain[]' is not assignable to type 'readonly [Chain, ...Chain[]]'.
+  Source provides no match for required element at position 0 in target.
+src/common/atoms/wallet.ts(43,15): error TS2554: Expected 2 arguments, but got 1.
+src/common/atoms/wallet.ts(67,5): error TS2322: Type 'Chain[]' is not assignable to type 'readonly [Chain, ...Chain[]]'.
+  Source provides no match for required element at position 0 in target.
+src/common/atoms/wallet.ts(68,17): error TS2554: Expected 2 arguments, but got 1.
+src/common/atoms/wallet.ts(73,39): error TS2353: Object literal may only specify known properties, and 'chains' does not exist in type 'DefaultWalletOptions'.
+src/common/atoms/wallet.ts(76,13): error TS2353: Object literal may only specify known properties, and 'chains' does not exist in type 'CoinbaseWalletOptions'.
+src/common/atoms/wallet.ts(78,44): error TS2353: Object literal may only specify known properties, and 'chains' does not exist in type 'WalletConnectWalletOptions'.
+src/components/providers/wallet-provider.tsx(80,11): error TS2322: Type '{ children: ReactNode; theme: { colors: { accentColor: string; accentColorForeground: string; actionButtonBorder: string; actionButtonBorderMobile: string; actionButtonSecondaryBackground: string; ... 24 more ...; standby: string; }; shadows: { ...; }; fonts: { ...; }; radii: { ...; }; blurs: { ...; }; }; modalSize:...' is not assignable to type 'IntrinsicAttributes & RainbowKitProviderProps'.
+  Property 'chains' does not exist on type 'IntrinsicAttributes & RainbowKitProviderProps'.
+src/components/WalletModal.tsx(23,34): error TS2722: Cannot invoke an object which is possibly 'undefined'.
+src/components/WalletModal.tsx(23,34): error TS18048: 'window.ethereum.request' is possibly 'undefined'.
+src/lib/wallet-config.ts(29,10): error TS2554: Expected 2 arguments, but got 1.
+src/lib/wallet-config.ts(33,24): error TS2554: Expected 0 arguments, but got 1.
+src/lib/wallet-config.ts(37,11): error TS2353: Object literal may only specify known properties, and 'projectId' does not exist in type 'CoinbaseWalletOptions'.
+src/lib/wallet-config.ts(60,5): error TS2322: Type '({ blockExplorers: { readonly default: { readonly name: "Etherscan"; readonly url: "https://etherscan.io"; readonly apiUrl: "https://api.etherscan.io/api"; }; }; contracts: { readonly ensRegistry: { ...; }; readonly ensUniversalResolver: { ...; }; readonly multicall3: { ...; }; }; ... 10 more ...; serializers?: Chai...' is not assignable to type 'readonly [Chain, ...Chain[]]'.
+  Source provides no match for required element at position 0 in target.

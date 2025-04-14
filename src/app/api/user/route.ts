@@ -3,9 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ethers } from 'ethers';
 import { User } from '@/types';
 
-// Mock database for local development (when KV is not available)
-const mockUserDb = new Map<string, User>();
-
 // Create a new user or retrieve existing user
 export async function POST(request: NextRequest) {
   try {
@@ -34,9 +31,7 @@ export async function POST(request: NextRequest) {
       // Try to get user from KV
       user = await kv.hgetall<User>(`user:${lowerCaseAddress}`);
     } catch (kvError) {
-      console.warn('KV database error, using mock database:', kvError);
-      // Fall back to mock database if KV fails
-      user = mockUserDb.get(lowerCaseAddress) || null;
+      console.warn('KV database error', kvError);
     }
 
     // Create user if it doesn't exist
@@ -50,11 +45,9 @@ export async function POST(request: NextRequest) {
       try {
         await kv.hset(`user:${lowerCaseAddress}`, newUser as Record<string, unknown>);
       } catch (kvError) {
-        console.warn('KV database error on create, using mock database:', kvError);
-        // Fall back to mock database
-        mockUserDb.set(lowerCaseAddress, newUser);
+        console.warn('KV database error on create', kvError);
       }
-      
+
       user = newUser;
     } else {
       // Update last login time
@@ -62,15 +55,13 @@ export async function POST(request: NextRequest) {
         ...user,
         lastLogin: Date.now(),
       };
-      
+
       try {
         await kv.hset(`user:${lowerCaseAddress}`, updatedUser as Record<string, unknown>);
       } catch (kvError) {
-        console.warn('KV database error on update, using mock database:', kvError);
-        // Fall back to mock database
-        mockUserDb.set(lowerCaseAddress, updatedUser);
+        console.warn('KV database error on update', kvError);
       }
-      
+
       user = updatedUser;
     }
 
@@ -97,9 +88,7 @@ export async function GET(request: NextRequest) {
       // Try to get user from KV
       user = await kv.hgetall<User>(`user:${lowerCaseAddress}`);
     } catch (kvError) {
-      console.warn('KV database error on get, using mock database:', kvError);
-      // Fall back to mock database
-      user = mockUserDb.get(lowerCaseAddress) || null;
+      console.warn('KV database error on get', kvError);
     }
 
     if (!user) {

@@ -47,8 +47,7 @@ export function ConnectButton() {
       // Ethereum 환경 상태 확인 로깅
       console.log("Ethereum environment:", {
         hasEthereum,
-        isMetaMaskAvailable: hasEthereum && (window.ethereum.isMetaMask || false),
-        providers: hasEthereum && window.ethereum.providers ? window.ethereum.providers.length : 'N/A'
+        isMetaMaskAvailable: hasEthereum && (window.ethereum.isMetaMask || false)
       });
       
       // connectors 상태에 따라 적절한 메시지 표시
@@ -57,11 +56,6 @@ export function ConnectButton() {
         // MetaMask가 설치되지 않은 경우
         if (!hasEthereum) {
           setErrorMessage("No wallet extension detected. Please install MetaMask or another wallet extension.");
-          return;
-        }
-        // MetaMask가 잠긴 경우
-        else if (hasEthereum && window.ethereum.isMetaMask && !window.ethereum._metamask?.isUnlocked) {
-          setErrorMessage("Your MetaMask is locked. Please unlock it to continue.");
           return;
         }
       }

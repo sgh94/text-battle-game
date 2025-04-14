@@ -19,22 +19,6 @@ const config = createConfig({
     // MetaMask 및 기타 브라우저 지갑
     injected({ 
       shimDisconnect: true,
-      // 지원하는 모든 브라우저 내장 지갑 연결 시도
-      getProvider: () => {
-        try {
-          // injected provider 확인
-          const providers = window.ethereum ? 
-            Array.isArray(window.ethereum.providers) ? 
-              window.ethereum.providers : [window.ethereum] : 
-              [];
-              
-          console.log("Found injected providers:", providers.length);
-          return window.ethereum;
-        } catch (error) {
-          console.error("Error getting injected provider:", error);
-          return undefined;
-        }
-      }
     }),
     
     // WalletConnect

@@ -3,22 +3,30 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useDisconnect } from 'wagmi';
 import { ConnectButton as RainbowKitConnectButton } from '@rainbow-me/rainbowkit';
+import { useWalletErrorState } from '@/lib/atoms/wallet';
 
 export function ConnectButton() {
-  const { isConnected, address } = useAccount();
-  const { disconnect } = useDisconnect();
   const [mounted, setMounted] = useState(false);
+  const [errorMessage, setErrorMessage] = useWalletErrorState();
 
-  // 클라이언트 사이드 렌더링 확인
+  // 컴포넌트 마운트 확인
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // SSR 렌더링 시 오류 방지
+  // SSR을 위한 처리
   if (!mounted) return null;
 
   return (
     <div className="flex flex-col items-end mb-6">
+      {/* 오류 메시지 표시 */}
+      {errorMessage && (
+        <div className="mb-2 p-2 bg-red-600 text-white text-sm rounded-md animate-pulse">
+          {errorMessage}
+        </div>
+      )}
+
+      {/* RainbowKit 커스텀 연결 버튼 */}
       <RainbowKitConnectButton.Custom>
         {({
           account,
@@ -27,17 +35,15 @@ export function ConnectButton() {
           openChainModal,
           openConnectModal,
           authenticationStatus,
-          mounted,
+          mounted: rainbowKitMounted,
         }) => {
-          // Note: If your app doesn't use authentication, you
-          // can remove all 'authenticationStatus' checks
-          const ready = mounted && authenticationStatus !== 'loading';
+          // 마운트 및 인증 상태 확인
+          const ready = rainbowKitMounted && authenticationStatus !== 'loading';
           const connected =
             ready &&
             account &&
             chain &&
-            (!authenticationStatus ||
-              authenticationStatus === 'authenticated');
+            (!authenticationStatus || authenticationStatus === 'authenticated');
 
           return (
             <div
@@ -68,7 +74,10 @@ export function ConnectButton() {
 
                 return (
                   <div className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-700 rounded-lg shadow">
-                    <button onClick={openChainModal} className="flex items-center">
+                    <button 
+                      onClick={openChainModal} 
+                      className="flex items-center bg-gray-200 dark:bg-gray-600 rounded px-2 py-1 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                    >
                       {chain.hasIcon && (
                         <div
                           className="mr-1 w-4 h-4 rounded-full overflow-hidden"
@@ -90,18 +99,17 @@ export function ConnectButton() {
                       </span>
                     </button>
 
-                    <button onClick={openAccountModal} className="flex items-center">
+                    <button 
+                      onClick={openAccountModal} 
+                      className="flex items-center bg-gray-200 dark:bg-gray-600 rounded px-2 py-1 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                    >
                       <span className="bg-green-500 rounded-full w-2.5 h-2.5 block animate-pulse mr-2"></span>
                       <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
                         {account.displayName}
+                        {account.displayBalance
+                          ? ` (${account.displayBalance})`
+                          : ''}
                       </span>
-                    </button>
-                    
-                    <button
-                      onClick={() => disconnect()}
-                      className="ml-2 bg-red-500 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm transition-colors duration-200"
-                    >
-                      연결 해제
                     </button>
                   </div>
                 );

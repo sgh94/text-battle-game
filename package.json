@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "allError": "npx tsc --noEmit > error.txt"
+    "allError": "npx tsc --noEmit > error.txt",
+    "seed": "ts-node -r tsconfig-paths/register src/scripts/seed-characters.ts",
+    "seed:dev": "cross-env NODE_ENV=development ts-node -r tsconfig-paths/register src/scripts/seed-characters.ts"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.0.1",
@@ -39,10 +41,13 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "cross-env": "^7.0.3",
     "eslint": "^8",
     "eslint-config-next": "14.1.0",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5"
   }
 }

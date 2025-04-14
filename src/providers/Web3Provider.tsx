@@ -40,6 +40,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
 
   const [authHeader, setAuthHeader] = useState<string | null>(null);
   const [appError, setAppError] = useState<string | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
   // Attempt to auto-connect on initial load if Ethereum is available
   useEffect(() => {
@@ -114,7 +115,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     if (isConnected && address) {
       const savedAddress = localStorage.getItem('connectedAddress');
       if (address === savedAddress) {
-        generateAuthHeader(address);
+        // 인증 중복 방지를 위해 isAuthenticating 상태 체크
+        if (!isAuthenticating && !authHeader) {
+          generateAuthHeader(address);
+        }
       }
     }
   }, [isConnected, address]); // isConnected와 address가 확정된 후 실행
@@ -142,8 +146,15 @@ export function Web3Provider({ children }: { children: ReactNode }) {
   }, [connectError, signError]);
 
 
-  // 인증 헤더 생성
+  // 인증 헤더 생성 - 락 추가
   const generateAuthHeader = useCallback(async (walletAddress: `0x${string}`) => {
+    // 이미 인증 중이거나 헤더가 이미 있는 경우 중복 방지
+    if (isAuthenticating || authHeader) {
+      console.log("Authentication already in progress or already authenticated");
+      return authHeader;
+    }
+
+    setIsAuthenticating(true);
     setAppError(null);
     console.log("Attempting to generate auth header..."); // 함수 호출 확인
     try {
@@ -170,8 +181,10 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       }
       setAuthHeader(null);
       return null;
+    } finally {
+      setIsAuthenticating(false);
     }
-  }, [signMessageAsync]); // 의존성 배열에 signMessageAsync 포함
+  }, [signMessageAsync, authHeader, isAuthenticating]); // 의존성 배열에 추가
 
 
   // 지갑 연결 함수 (개선됨)
@@ -268,6 +281,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       }
       const responseData = await response.json(); // 성공 응답 데이터 확인 (선택 사항)
       console.log("User created/verified successfully on server:", responseData);
+      return true;
     } catch (error: any) { // 타입 명시
       console.error('Error creating/verifying user:', error);
       // 사용자가 거부한 경우 메시지 개선
@@ -277,6 +291,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to register user';
         setAppError(errorMessage);
       }
+      return false;
     }
   }, [signMessageAsync]); // 의존성 배열에 signMessageAsync 포함
 
@@ -288,14 +303,22 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       console.log(`Wallet connection processed for address: ${address}`);
       // 연결 시 사용자 생성/확인 및 인증 헤더 생성을 비동기로 처리
       const handleConnection = async () => {
-        await createUser(address);
-        // createUser에서 에러가 발생하지 않았거나, 에러 처리 정책에 따라 인증 헤더 생성 결정
-        // 예를 들어, 서버 등록 실패와 관계없이 인증 헤더는 생성하도록 할 수 있음
-        await generateAuthHeader(address);
+        try {
+          // 사용자 등록 시도
+          await createUser(address);
+          
+          // 사용자 등록 결과와 관계없이 인증 헤더 생성 시도 
+          // (인증 헤더가 없거나 인증 중이 아닐 때만)
+          if (!authHeader && !isAuthenticating) {
+            await generateAuthHeader(address);
+          }
+        } catch (error) {
+          console.error("Error during post-connection setup:", error);
+        }
       };
       handleConnection();
     }
-  }, [isConnected, address, createUser, generateAuthHeader]); // 의존성 배열 확인
+  }, [isConnected, address, createUser, generateAuthHeader, authHeader, isAuthenticating]); // 의존성 배열 확인
 
 
   // 지갑 연결 해제 함수
@@ -312,7 +335,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     address,
     isConnected,
     // isConnecting: isWagmiConnecting || isAccountConnecting || isSigning, // 여러 로딩 상태 조합 가능
-    isConnecting: isWagmiConnecting, // Primarily use connection pending state
+    isConnecting: isWagmiConnecting || isAuthenticating, // Primarily use connection pending state
     connectWallet,
     disconnectWallet,
     authHeader,

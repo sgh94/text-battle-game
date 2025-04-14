@@ -145,24 +145,28 @@ export function Web3Provider({ children }: { children: ReactNode }) {
       connector = connectorToUse;
     } 
     // 2. MetaMask connector 찾기
-    else if (!connector) {
+    else {
       connector = connectors.find(c => c.id === 'injected' && c.name === 'MetaMask' && c.ready);
-    }
-    // 3. 'injected' 타입의 준비된 모든 connector 시도
-    else if (!connector) {
-      connector = connectors.find(c => c.id === 'injected' && c.ready);
-    }
-    // 4. coinbaseWallet connector 시도
-    else if (!connector) {
-      connector = connectors.find(c => c.id === 'coinbaseWallet' && c.ready);
-    }
-    // 5. walletConnect connector 시도
-    else if (!connector) {
-      connector = connectors.find(c => c.id === 'walletConnect' && c.ready);
-    }
-    // 6. 사용 가능한 다른 모든 connector 시도
-    else if (!connector) {
-      connector = connectors.find(c => c.ready);
+      
+      // 3. 'injected' 타입의 준비된 모든 connector 시도
+      if (!connector) {
+        connector = connectors.find(c => c.id === 'injected' && c.ready);
+      }
+      
+      // 4. coinbaseWallet connector 시도
+      if (!connector) {
+        connector = connectors.find(c => c.id === 'coinbaseWallet' && c.ready);
+      }
+      
+      // 5. walletConnect connector 시도
+      if (!connector) {
+        connector = connectors.find(c => c.id === 'walletConnect' && c.ready);
+      }
+      
+      // 6. 사용 가능한 다른 모든 connector 시도
+      if (!connector) {
+        connector = connectors.find(c => c.ready);
+      }
     }
 
     if (connector) {

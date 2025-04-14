@@ -9,24 +9,24 @@ export function ConnectButton() {
   const [mounted, setMounted] = useState(false);
   const [errorMessage, setErrorMessage] = useWalletErrorState();
 
-  // 컴포넌트 마운트 확인
+  // Check component mount for client side rendering
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // SSR을 위한 처리
+  // Handle SSR
   if (!mounted) return null;
 
   return (
     <div className="flex flex-col items-end mb-6">
-      {/* 오류 메시지 표시 */}
+      {/* Display error message */}
       {errorMessage && (
         <div className="mb-2 p-2 bg-red-600 text-white text-sm rounded-md animate-pulse">
           {errorMessage}
         </div>
       )}
 
-      {/* RainbowKit 커스텀 연결 버튼 */}
+      {/* RainbowKit custom connect button */}
       <RainbowKitConnectButton.Custom>
         {({
           account,
@@ -37,7 +37,7 @@ export function ConnectButton() {
           authenticationStatus,
           mounted: rainbowKitMounted,
         }) => {
-          // 마운트 및 인증 상태 확인
+          // Check mount and authentication status
           const ready = rainbowKitMounted && authenticationStatus !== 'loading';
           const connected =
             ready &&
@@ -67,7 +67,7 @@ export function ConnectButton() {
                         <path fillRule="evenodd" d="M3 5a2 2 0 012-2h1a1 1 0 010 2H5v13h14V5h-1a1 1 0 110-2h1a2 2 0 012 2v13a2 2 0 01-2 2H5a2 2 0 01-2-2V5z" clipRule="evenodd" />
                         <path d="M10 4a1 1 0 00-1 1v4H7a1 1 0 100 2h2v4a1 1 0 102 0v-4h2a1 1 0 100-2h-2V5a1 1 0 00-1-1z" />
                       </svg>
-                      지갑 연결
+                      Connect Wallet
                     </button>
                   );
                 }

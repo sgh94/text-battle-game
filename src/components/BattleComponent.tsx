@@ -122,7 +122,7 @@ export function BattleComponent() {
       if (!response.ok) {
         if (response.status === 429 && data.error) {
           // Cooldown active
-          const match = data.error.match(/(\d+)\s+seconds/);
+          const match = data.error.match(/(\\d+)\\s+seconds/);
           if (match && match[1]) {
             startCooldownTimer(parseInt(match[1]));
           }
@@ -171,7 +171,7 @@ export function BattleComponent() {
 
   return (
     <div className="mt-4">
-      <h2 className="text-xl font-bold mb-6">모의 배틀</h2>
+      <h2 className="text-xl font-bold mb-6">Practice Battle</h2>
       
       {isLoading ? (
         <div className="flex justify-center my-8">
@@ -190,7 +190,7 @@ export function BattleComponent() {
       ) : (
         <div>
           <div className="bg-gray-800 rounded-lg p-6 mb-6">
-            <h3 className="text-lg font-medium mb-4">캐릭터 선택</h3>
+            <h3 className="text-lg font-medium mb-4">Select Character</h3>
             
             <select
               value={selectedCharacter}
@@ -217,19 +217,19 @@ export function BattleComponent() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  배틀 진행 중...
+                  Battle in progress...
                 </div>
               ) : cooldown !== null ? (
-                `대기 중... ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')}`
+                `Cooldown... ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')}`
               ) : (
-                '배틀 시작'
+                'Start Battle'
               )}
             </button>
           </div>
           
           {battleResult && opponent && (
             <div className="bg-gray-800 rounded-lg p-6">
-              <h3 className="text-lg font-medium mb-4">배틀 결과</h3>
+              <h3 className="text-lg font-medium mb-4">Battle Result</h3>
               
               <div className="flex justify-between items-center mb-6">
                 <div className="text-center flex-1">
@@ -252,11 +252,11 @@ export function BattleComponent() {
               <div className="mb-4">
                 <div className="text-center text-xl font-bold mb-2">
                   {battleResult.isDraw ? (
-                    <span className="text-gray-400">무승부!</span>
+                    <span className="text-gray-400">Draw!</span>
                   ) : battleResult.winner === selectedCharacter ? (
-                    <span className="text-green-500">승리!</span>
+                    <span className="text-green-500">Victory!</span>
                   ) : (
-                    <span className="text-red-500">패배!</span>
+                    <span className="text-red-500">Defeat!</span>
                   )}
                 </div>
                 <div className="bg-gray-700 p-4 rounded-lg">

@@ -29,7 +29,7 @@ export function CharactersList() {
     } else {
       setCharacters([]);
     }
-  }, [isConnected, address, authHeader]); // authHeader 추가하여 변경 시 캐릭터 목록 다시 불러오기
+  }, [isConnected, address, authHeader]); // authHeader added to reload character list when changed
 
   const fetchCharacters = async () => {
     if (!address) return;
@@ -50,12 +50,12 @@ export function CharactersList() {
   };
 
   const handleCreateButtonClick = async () => {
-    // authHeader가 없으면 생성 시도
+    // Try to create authHeader if not existing
     if (!authHeader) {
       setWaitingForAuth(true);
       try {
         await signAuthMessage();
-        // authHeader가 state에 설정되는 것을 기다린 후 모달 표시
+        // Wait for authHeader to be set in state before showing modal
         setTimeout(() => {
           setWaitingForAuth(false);
           setShowModal(true);
@@ -65,7 +65,7 @@ export function CharactersList() {
         setWaitingForAuth(false);
       }
     } else {
-      // authHeader가 이미 있으면 바로 모달 표시
+      // Show modal directly if authHeader already exists
       setShowModal(true);
     }
   };
@@ -86,7 +86,7 @@ export function CharactersList() {
   return (
     <div className="mt-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">내 캐릭터</h2>
+        <h2 className="text-xl font-bold">My Characters</h2>
         {characters.length < 5 && (
           <button
             onClick={handleCreateButtonClick}
@@ -99,10 +99,10 @@ export function CharactersList() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                인증 중...
+                Authenticating...
               </span>
             ) : (
-              '캐릭터 추가'
+              'Add Character'
             )}
           </button>
         )}
@@ -132,7 +132,7 @@ export function CharactersList() {
                   <div className="text-right">
                     <div className="text-lg font-bold">{character.elo} Elo</div>
                     <div className="text-sm text-gray-400">
-                      {character.wins}승 {character.losses}패 {character.draws}무
+                      {character.wins}W {character.losses}L {character.draws}D
                     </div>
                   </div>
                 </div>

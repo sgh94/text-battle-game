@@ -225,13 +225,13 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
           <div className="text-right">
             <div className="text-xl font-bold">{character.elo} Elo</div>
             <div className="text-sm text-gray-400">
-              {character.wins}승 {character.losses}패 {character.draws}무
+              {character.wins}W {character.losses}L {character.draws}D
             </div>
           </div>
         </div>
         
         <div className="mb-6">
-          <h3 className="text-gray-400 mb-2">특성</h3>
+          <h3 className="text-gray-400 mb-2">Traits</h3>
           <p className="whitespace-pre-line">{character.traits}</p>
         </div>
         
@@ -250,12 +250,12 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  배틀 진행 중...
+                  Battle in progress...
                 </div>
               ) : cooldown !== null ? (
-                `대기 중... ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')}`
+                `Cooldown... ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')}`
               ) : (
-                '배틀 시작'
+                'Start Battle'
               )}
             </button>
             
@@ -281,13 +281,13 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         
         {battleResult && (
           <div className="mt-6 bg-gray-700 p-4 rounded-lg">
-            <h3 className="text-xl font-bold mb-2">배틀 결과</h3>
+            <h3 className="text-xl font-bold mb-2">Battle Result</h3>
             <p className="mb-4">
               {battleResult.isDraw 
-                ? '무승부!' 
+                ? 'Draw!' 
                 : battleResult.winner === character.id 
-                  ? '승리!' 
-                  : '패배!'}
+                  ? 'Victory!' 
+                  : 'Defeat!'}
             </p>
             <p className="text-gray-300">{battleResult.narrative || battleResult.explanation}</p>
           </div>

@@ -45,7 +45,7 @@ export function RankingList() {
 
   return (
     <div className="mt-4">
-      <h2 className="text-xl font-bold mb-4">랭킹</h2>
+      <h2 className="text-xl font-bold mb-4">Rankings</h2>
 
       {isLoading ? (
         <div className="flex justify-center my-8">
@@ -64,10 +64,10 @@ export function RankingList() {
             <thead className="bg-gray-700">
               <tr>
                 <th className="px-4 py-2 text-left">#</th>
-                <th className="px-4 py-2 text-left">캐릭터</th>
-                <th className="px-4 py-2 text-left">소유자</th>
+                <th className="px-4 py-2 text-left">Character</th>
+                <th className="px-4 py-2 text-left">Owner</th>
                 <th className="px-4 py-2 text-right">Elo</th>
-                <th className="px-4 py-2 text-right">승/패/무</th>
+                <th className="px-4 py-2 text-right">W/L/D</th>
               </tr>
             </thead>
             <tbody>

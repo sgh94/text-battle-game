@@ -37,21 +37,25 @@ export async function DELETE(
     const characterId = params.id;
     const character = await kv.hgetall<Character>(`character:${characterId}`);
 
+    if (!userAddress) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     if (!character) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
     // Verify ownership
-    if (character.owner.toLowerCase() !== userAddress.toLowerCase()) {
+    if (character.owner.toLowerCase() !== userAddress!.toLowerCase()) {
       return NextResponse.json({ error: 'You do not own this character' }, { status: 403 });
     }
 
     // Delete character data
     await kv.del(`character:${characterId}`);
-    
+
     // Remove from user's character list
     await kv.srem(`user:${character.owner}:characters`, characterId);
-    
+
     // Remove from global ranking
     await kv.zrem('characters:ranking', characterId);
 

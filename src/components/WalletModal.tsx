@@ -20,7 +20,7 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
       if (typeof window !== 'undefined' && window.ethereum?.isMetaMask) {
         try {
           // eth_accounts는 현재 사용 가능한 계정만 반환 (잠금 상태 체크용)
-          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          const accounts = await window.ethereum?.request?.({ method: 'eth_accounts' }) || [];
           setIsMetaMaskUnlocked(accounts.length > 0);
           console.log("MetaMask unlock state:", accounts.length > 0);
         } catch (err) {

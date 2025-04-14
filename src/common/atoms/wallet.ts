@@ -1,5 +1,5 @@
 import { atom, useAtom } from 'jotai';
-import { http, createConfig, Chain, WalletClient } from "wagmi";
+import { http, createConfig } from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
 import { 
   getDefaultWallets, 
@@ -18,7 +18,7 @@ import {
 export const RainbowKitAppName = 'Text Battle Game';
 
 // 지원할 체인 설정
-export const chains: Chain[] = [mainnet, sepolia];
+export const chains = [mainnet, sepolia];
 
 // WalletConnect projectId
 const projectId = typeof window !== 'undefined' 
@@ -28,18 +28,16 @@ const projectId = typeof window !== 'undefined'
 // 기본 지갑 설정 가져오기
 const { wallets } = getDefaultWallets({
   appName: RainbowKitAppName,
-  projectId,
-  chains,
+  projectId
 });
 
 // 추가 지갑 설정
 const extraWallets = [
-  phantomWallet({ chains }),
+  phantomWallet(),
 ];
 
 // 기본 Wagmi 설정 생성
 export const defaultWagmiConfig = createConfig({
-  chains,
   connectors: connectorsForWallets([
     {
       groupName: 'Recommended',
@@ -64,18 +62,16 @@ export const createWagmiConfig = (
   }[],
 ) => {
   return createConfig({
-    chains,
     connectors: connectorsForWallets([
       ...customWallets,
       {
         groupName: 'Popular',
         wallets: [
-          metaMaskWallet({ projectId, chains }),
+          metaMaskWallet({ projectId }),
           coinbaseWallet({ 
-            appName: RainbowKitAppName,
-            chains
+            appName: RainbowKitAppName
           }),
-          walletConnectWallet({ projectId, chains }),
+          walletConnectWallet({ projectId }),
         ],
       },
       {

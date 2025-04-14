@@ -30,11 +30,10 @@ export const createRainbowKitConnectors = () => {
     {
       groupName: '인기 지갑',
       wallets: [
-        injectedWallet({ projectId }),
+        injectedWallet(),
         metaMaskWallet({ projectId }),
         coinbaseWallet({ 
-          appName: RainbowKitAppName,
-          projectId
+          appName: RainbowKitAppName
         }),
         walletConnectWallet({ projectId }),
       ],
@@ -42,7 +41,7 @@ export const createRainbowKitConnectors = () => {
     {
       groupName: '기타 지갑',
       wallets: [
-        okxWallet({ projectId }),
+        okxWallet(),
         phantomWallet(),
         braveWallet(),
         argentWallet({ projectId }),
@@ -57,7 +56,6 @@ export const createRainbowKitConnectors = () => {
 // Wagmi 설정 생성 함수
 export const createWagmiConfig = () => {
   return createConfig({
-    chains,
     transports: {
       [mainnet.id]: http(),
       [sepolia.id]: http(),

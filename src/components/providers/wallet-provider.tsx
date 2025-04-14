@@ -77,7 +77,6 @@ const WalletProvider: FC<PropsWithChildren> = ({ children }) => {
           })}
           modalSize="compact"
           coolMode // 애니메이션 효과
-          chains={chains}
         >
           {children}
         </RainbowKitProvider>

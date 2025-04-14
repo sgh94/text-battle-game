@@ -21,7 +21,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user's existing characters
-    const characterIds = await kv.smembers<string>(`user:${userAddress}:characters`);
+    const characterIdsResponse = await kv.smembers(`user:${userAddress}:characters`);
+    // Ensure characterIds is an array
+    const characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
     
     // Check if user already has 5 characters
     if (characterIds.length >= 5) {
@@ -74,7 +76,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Address is required' }, { status: 400 });
     }
 
-    const characterIds = await kv.smembers<string>(`user:${address.toLowerCase()}:characters`);
+    const characterIdsResponse = await kv.smembers(`user:${address.toLowerCase()}:characters`);
+    // Ensure characterIds is an array
+    const characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
     
     if (!characterIds || characterIds.length === 0) {
       return NextResponse.json({ characters: [] });

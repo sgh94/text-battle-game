@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(request.nextUrl.searchParams.get('offset') || '0');
     
     // Get top characters by ELO
-    const rankingResults = await kv.zrange<string>(
+    const rankingResultsResponse = await kv.zrange(
       'characters:ranking',
       0,
       -1,
@@ -18,7 +18,10 @@ export async function GET(request: NextRequest) {
       }
     );
     
-    if (!rankingResults || !Array.isArray(rankingResults) || rankingResults.length === 0) {
+    // Ensure rankingResults is an array
+    const rankingResults = Array.isArray(rankingResultsResponse) ? rankingResultsResponse : [];
+    
+    if (!rankingResults || rankingResults.length === 0) {
       return NextResponse.json({ rankings: [] });
     }
     
@@ -38,7 +41,7 @@ export async function GET(request: NextRequest) {
     
     // Fetch character details
     const rankings = await Promise.all(
-      paginatedScores.map(async (item, index) => {
+      paginatedScores.map(async (item: ScoreMember, index: number) => {
         const characterId = item.member;
         const character = await kv.hgetall<Character>(`character:${characterId}`);
         
@@ -52,7 +55,7 @@ export async function GET(request: NextRequest) {
       })
     );
     
-    return NextResponse.json({ rankings: rankings.filter(ranking => ranking !== null) });
+    return NextResponse.json({ rankings: rankings.filter((ranking): ranking is Character & { rank: number, elo: number } => ranking !== null) });
   } catch (error) {
     console.error('Error fetching rankings:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

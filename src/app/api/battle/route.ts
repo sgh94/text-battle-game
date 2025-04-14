@@ -105,7 +105,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if character belongs to user
-    const userCharacters = await kv.smembers<string>(`user:${userAddress}:characters`);
+    const userCharactersResponse = await kv.smembers(`user:${userAddress}:characters`);
+    // Ensure userCharacters is an array
+    const userCharacters = Array.isArray(userCharactersResponse) ? userCharactersResponse : [userCharactersResponse].filter(Boolean);
+    
     if (!userCharacters.includes(characterId)) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
@@ -133,10 +136,12 @@ export async function POST(request: NextRequest) {
     const characterElo = typeof character.elo === 'number' ? character.elo : parseInt(character.elo as unknown as string);
     const eloRange = 200; // Look for characters within +/- 200 ELO
     
-    // Use the range command instead since zrangebyscore isn't available
-    const allCharactersInRange = await kv.zrange<string>('characters:ranking', 0, -1, { withScores: true });
+    // Use the range command instead
+    const allCharactersResponse = await kv.zrange('characters:ranking', 0, -1, { withScores: true });
+    // Ensure allCharactersInRange is an array
+    const allCharactersInRange = Array.isArray(allCharactersResponse) ? allCharactersResponse : [];
     
-    if (!allCharactersInRange || !Array.isArray(allCharactersInRange)) {
+    if (!allCharactersInRange || allCharactersInRange.length === 0) {
       return NextResponse.json({ error: 'Failed to find opponents' }, { status: 500 });
     }
     
@@ -162,9 +167,11 @@ export async function POST(request: NextRequest) {
     
     if (possibleOpponents.length === 0) {
       // If no opponents in range, get closest ELO characters
-      const allCharacters = await kv.zrange<string>('characters:ranking', 0, -1, { withScores: true });
+      const allCharactersResponse = await kv.zrange('characters:ranking', 0, -1, { withScores: true });
+      // Ensure allCharacters is an array
+      const allCharacters = Array.isArray(allCharactersResponse) ? allCharactersResponse : [];
       
-      if (!allCharacters || !Array.isArray(allCharacters)) {
+      if (!allCharacters || allCharacters.length === 0) {
         return NextResponse.json({ error: 'Failed to find opponents' }, { status: 500 });
       }
       
@@ -222,7 +229,7 @@ export async function POST(request: NextRequest) {
         timestamp: Date.now(),
       };
       
-      await kv.hset(battleId, battleResult);
+      await kv.hset(battleId, battleResult as Record<string, unknown>);
       
       // Update last battle time
       await kv.set(`user:${userAddress}:lastBattle`, Date.now());
@@ -272,7 +279,7 @@ export async function POST(request: NextRequest) {
         timestamp: Date.now(),
       };
       
-      await kv.hset(battleId, battleResult);
+      await kv.hset(battleId, battleResult as Record<string, unknown>);
       
       // Update last battle time
       await kv.set(`user:${userAddress}:lastBattle`, Date.now());
@@ -307,15 +314,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Either characterId or address is required' }, { status: 400 });
     }
     
-    let battleIds: string[];
+    let battleIds: string[] = [];
     if (characterId) {
       // Get battles for a specific character
-      battleIds = await kv.lrange<string>(`character:${characterId}:battles`, 0, limit - 1);
+      const response = await kv.lrange(`character:${characterId}:battles`, 0, limit - 1);
+      battleIds = Array.isArray(response) ? response : [];
     } else if (userAddress) {
       // Get battles for a user
-      battleIds = await kv.lrange<string>(`user:${userAddress.toLowerCase()}:battles`, 0, limit - 1);
-    } else {
-      return NextResponse.json({ battles: [] });
+      const response = await kv.lrange(`user:${userAddress.toLowerCase()}:battles`, 0, limit - 1);
+      battleIds = Array.isArray(response) ? response : [];
     }
     
     if (!battleIds || battleIds.length === 0) {

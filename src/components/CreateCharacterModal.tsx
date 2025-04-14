@@ -21,7 +21,7 @@ export function CreateCharacterModal({
   const [error, setError] = useState('');
   const [currentAuthHeader, setCurrentAuthHeader] = useState(authHeader);
 
-  // authHeader가 변경되면 현재 state 업데이트
+  // Update current state when authHeader changes
   useEffect(() => {
     if (authHeader) {
       setCurrentAuthHeader(authHeader);
@@ -36,7 +36,7 @@ export function CreateCharacterModal({
       return;
     }
     
-    // 인증 헤더가 없으면 다시 생성 시도
+    // Try to create a new auth header if one doesn't exist
     let header = currentAuthHeader;
     if (!header) {
       try {
@@ -69,7 +69,7 @@ export function CreateCharacterModal({
       const data = await response.json();
       
       if (!response.ok) {
-        // 인증 오류일 경우 새로운 헤더 생성 시도
+        // If authentication error, try to create a new header
         if (response.status === 401) {
           const newHeader = await signAuthMessage();
           if (newHeader) {
@@ -93,12 +93,12 @@ export function CreateCharacterModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">캐릭터 생성</h2>
+        <h2 className="text-xl font-bold mb-4">Create Character</h2>
         
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label htmlFor="name" className="block text-sm font-medium mb-1">
-              캐릭터 이름
+              Character Name
             </label>
             <input
               type="text"
@@ -112,7 +112,7 @@ export function CreateCharacterModal({
           
           <div className="mb-6">
             <label htmlFor="traits" className="block text-sm font-medium mb-1">
-              캐릭터 특성
+              Character Traits
             </label>
             <textarea
               id="traits"
@@ -147,7 +147,7 @@ export function CreateCharacterModal({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               )}
-              생성하기
+              Create
             </button>
           </div>
         </form>

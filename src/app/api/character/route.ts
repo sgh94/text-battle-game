@@ -2,6 +2,7 @@ import { kv } from '@vercel/kv';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAuth } from '@/lib/auth';
 import { Character } from '@/types';
+import { getDiscordUser } from '@/lib/db';
 
 // Create a new character
 export async function POST(request: NextRequest) {
@@ -17,6 +18,7 @@ export async function POST(request: NextRequest) {
     const name = requestData?.name as string;
     const traits = requestData?.traits as string;
     const userId = requestData?.userId; // This is Discord user ID
+    const league = requestData?.league || 'bronze'; // Default league if not specified
     
     // Basic validation
     if (!name || !traits) {
@@ -28,6 +30,20 @@ export async function POST(request: NextRequest) {
     
     if (!characterOwner) {
       return NextResponse.json({ error: 'User identification failed' }, { status: 400 });
+    }
+
+    // Get user's Discord data to verify league access
+    let userLeagues = ['bronze']; // Default
+    if (userId) {
+      const discordUser = await getDiscordUser(userId);
+      if (discordUser && discordUser.leagues) {
+        userLeagues = discordUser.leagues;
+      }
+    }
+
+    // Verify the user has access to the specified league
+    if (!userLeagues.includes(league)) {
+      return NextResponse.json({ error: 'You do not have access to this league' }, { status: 403 });
     }
 
     // Get user's existing characters
@@ -64,6 +80,7 @@ export async function POST(request: NextRequest) {
       wins: 0,
       losses: 0,
       draws: 0,
+      league: league, // Store the league
       createdAt: Date.now(),
     };
 
@@ -74,8 +91,16 @@ export async function POST(request: NextRequest) {
       await kv.sadd(`user:${characterOwner}:characters`, characterId);
       // Add character to the global ranking set with ELO as score
       await kv.zadd('characters:ranking', { score: defaultElo, member: characterId });
+      // Add character to the league-specific ranking
+      await kv.zadd(`league:${league}:ranking`, { score: defaultElo, member: characterId });
+      
+      console.log(`Character created successfully: ${characterId} for owner ${characterOwner} in league ${league}`);
     } catch (kvError) {
-      console.warn('KV database error on character creation', kvError);
+      console.error('KV database error on character creation', kvError);
+      return NextResponse.json(
+        { error: 'Database error while creating character' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true, character });
@@ -89,6 +114,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const address = request.nextUrl.searchParams.get('address');
+    const league = request.nextUrl.searchParams.get('league');
 
     if (!address) {
       return NextResponse.json({ error: 'Address is required' }, { status: 400 });
@@ -124,7 +150,14 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({ characters: characters.filter((char): char is Character => char !== null) });
+    // Filter by league if specified
+    let filteredCharacters = characters.filter((char): char is Character => char !== null);
+    
+    if (league) {
+      filteredCharacters = filteredCharacters.filter(char => char.league === league);
+    }
+
+    return NextResponse.json({ characters: filteredCharacters });
   } catch (error) {
     console.error('Error fetching characters:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

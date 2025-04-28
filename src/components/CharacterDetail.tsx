@@ -69,7 +69,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   // Add a function to check trait update cooldown
   const checkTraitUpdateCooldown = async () => {
     try {
-      const response = await fetch(`/api/character/${id}/update-traits`);
+      const response = await fetch(`/api/character/${encodeURIComponent(id)}/update-traits`);
 
       if (response.ok) {
         const data = await response.json();
@@ -100,7 +100,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       setIsLoading(true);
       setError('');
 
-      const response = await fetch(`/api/character/${id}`);
+      const response = await fetch(`/api/character/${encodeURIComponent(id)}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch character');
@@ -120,7 +120,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
 
   const checkCooldown = async () => {
     try {
-      const response = await fetch(`/api/user/cooldown?characterId=${id}`);
+      const response = await fetch(`/api/user/cooldown?characterId=${encodeURIComponent(id)}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -180,7 +180,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       if (!response.ok) {
         if (response.status === 429 && data.error) {
           // Cooldown active
-          const match = data.error.match(/(\d+)\s+seconds/);
+          const match = data.error.match(/(\\d+)\\s+seconds/);
           if (match && match[1]) {
             startCooldownTimer(parseInt(match[1]));
           }
@@ -228,7 +228,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
     try {
       setIsDeleting(true);
 
-      const response = await fetch(`/api/character/${id}`, {
+      const response = await fetch(`/api/character/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -271,7 +271,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       // First close the warning modal
       setShowTraitWarning(false);
       
-      const response = await fetch(`/api/character/${id}/update-traits`, {
+      const response = await fetch(`/api/character/${encodeURIComponent(id)}/update-traits`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -67,7 +67,7 @@ async function updateElo(winnerId: string, loserId: string, isDraw: boolean): Pr
     });
   }
 
-  // Update rankings
+  // Update global ranking
   await kv.zadd('characters:ranking', {
     score: newWinnerElo,
     member: winnerId,
@@ -75,6 +75,48 @@ async function updateElo(winnerId: string, loserId: string, isDraw: boolean): Pr
     score: newLoserElo,
     member: loserId,
   });
+
+  // Determine the leagues and update league-specific rankings
+  const winnerLeague = winner.league || 'general';
+  const loserLeague = loser.league || 'general';
+
+  // Update winner's league ranking
+  await kv.zadd(`league:${winnerLeague}:ranking`, {
+    score: newWinnerElo,
+    member: winnerId,
+  });
+
+  // Update loser's league ranking
+  await kv.zadd(`league:${loserLeague}:ranking`, {
+    score: newLoserElo,
+    member: loserId,
+  });
+
+  // Also update 'general' league if it's different
+  if (winnerLeague !== 'general') {
+    await kv.zadd('league:general:ranking', {
+      score: newWinnerElo,
+      member: winnerId,
+    });
+  }
+  
+  if (loserLeague !== 'general') {
+    await kv.zadd('league:general:ranking', {
+      score: newLoserElo,
+      member: loserId,
+    });
+  }
+
+  // Update morse league if applicable
+  if (winner.league === 'morse' || loser.league === 'morse') {
+    await kv.zadd('league:morse:ranking', {
+      score: newWinnerElo,
+      member: winnerId,
+    }, {
+      score: newLoserElo, 
+      member: loserId,
+    });
+  }
 
   // Get updated characters
   const updatedWinner = await kv.hgetall<Character>(`character:${winnerId}`);

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useWeb3 } from '@/providers/Web3Provider';
 import { BattleHistory } from './BattleHistory';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWeb3 } from '@/providers/Web3Provider';
 
 interface CreateCharacterModalProps {
   authHeader: string;
@@ -30,12 +29,12 @@ export function CreateCharacterModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!name.trim() || !traits.trim()) {
       setError('Name and traits are required');
       return;
     }
-    
+
     // Try to create a new auth header if one doesn't exist
     let header = currentAuthHeader;
     if (!header) {
@@ -52,11 +51,11 @@ export function CreateCharacterModal({
         return;
       }
     }
-    
+
     try {
       setIsSubmitting(true);
       setError('');
-      
+
       const response = await fetch('/api/character', {
         method: 'POST',
         headers: {
@@ -65,9 +64,9 @@ export function CreateCharacterModal({
         },
         body: JSON.stringify({ name, traits }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         // If authentication error, try to create a new header
         if (response.status === 401) {
@@ -81,7 +80,7 @@ export function CreateCharacterModal({
         }
         throw new Error(data.error || 'Failed to create character');
       }
-      
+
       onSuccess();
     } catch (error: any) {
       setError(error.message || 'An error occurred');
@@ -94,7 +93,7 @@ export function CreateCharacterModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
         <h2 className="text-xl font-bold mb-4">Create Character</h2>
-        
+
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label htmlFor="name" className="block text-sm font-medium mb-1">
@@ -109,7 +108,7 @@ export function CreateCharacterModal({
               placeholder="Enter character name"
             />
           </div>
-          
+
           <div className="mb-6">
             <label htmlFor="traits" className="block text-sm font-medium mb-1">
               Character Traits
@@ -123,11 +122,11 @@ export function CreateCharacterModal({
               placeholder="Describe your character's traits, abilities, and personality"
             />
           </div>
-          
+
           {error && (
             <div className="mb-4 text-red-500 text-sm">{error}</div>
           )}
-          
+
           <div className="flex justify-end gap-2">
             <button
               type="button"

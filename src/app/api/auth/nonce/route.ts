@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { kv } from '@vercel/kv';
 
+export const dynamic = 'force-dynamic';
+
 // Generate a new nonce for wallet signing
 export async function GET(request: NextRequest) {
   try {

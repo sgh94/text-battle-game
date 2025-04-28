@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useWeb3 } from '@/providers/Web3Provider';
 import Link from 'next/link';
 
 interface Character {
@@ -15,7 +14,6 @@ interface Character {
 }
 
 export function BattleComponent() {
-  const { address, isConnected, authHeader } = useWeb3();
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +30,7 @@ export function BattleComponent() {
     } else {
       setCharacters([]);
     }
-    
+
     return () => {
       if (cooldownTimer) clearInterval(cooldownTimer);
     };
@@ -40,15 +38,15 @@ export function BattleComponent() {
 
   const fetchCharacters = async () => {
     if (!address) return;
-    
+
     try {
       setIsLoading(true);
       const response = await fetch(`/api/character?address=${address}`);
-      
+
       if (response.ok) {
         const data = await response.json();
         setCharacters(data.characters || []);
-        
+
         // Auto-select the first character if none is selected
         if (data.characters?.length > 0 && !selectedCharacter) {
           setSelectedCharacter(data.characters[0].id);
@@ -63,13 +61,13 @@ export function BattleComponent() {
 
   const checkCooldown = async () => {
     if (!address) return;
-    
+
     try {
       const response = await fetch(`/api/user/cooldown?address=${address}`);
-      
+
       if (response.ok) {
         const data = await response.json();
-        
+
         if (data.cooldown > 0) {
           setCooldown(data.cooldown);
           startCooldownTimer(data.cooldown);
@@ -84,9 +82,9 @@ export function BattleComponent() {
 
   const startCooldownTimer = (seconds: number) => {
     if (cooldownTimer) clearInterval(cooldownTimer);
-    
+
     setCooldown(seconds);
-    
+
     const timer = setInterval(() => {
       setCooldown((prev) => {
         if (prev === null || prev <= 1) {
@@ -96,18 +94,18 @@ export function BattleComponent() {
         return prev - 1;
       });
     }, 1000);
-    
+
     setCooldownTimer(timer);
   };
 
   const startBattle = async () => {
     if (!authHeader || !selectedCharacter || isBattling) return;
-    
+
     try {
       setIsBattling(true);
       setBattleResult(null);
       setOpponent(null);
-      
+
       const response = await fetch('/api/battle', {
         method: 'POST',
         headers: {
@@ -116,9 +114,9 @@ export function BattleComponent() {
         },
         body: JSON.stringify({ characterId: selectedCharacter }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         if (response.status === 429 && data.error) {
           // Cooldown active
@@ -130,24 +128,24 @@ export function BattleComponent() {
         }
         throw new Error(data.error || 'Battle failed');
       }
-      
+
       // Get opponent character details
-      const opponentId = data.battle.character1 === selectedCharacter 
-        ? data.battle.character2 
+      const opponentId = data.battle.character1 === selectedCharacter
+        ? data.battle.character2
         : data.battle.character1;
-        
+
       const opponentResponse = await fetch(`/api/character/${opponentId}`);
       if (opponentResponse.ok) {
         const opponentData = await opponentResponse.json();
         setOpponent(opponentData.character);
       }
-      
+
       // Set battle result
       setBattleResult(data.battle);
-      
+
       // Refresh characters to update ELO
       fetchCharacters();
-      
+
       // Start cooldown
       startCooldownTimer(180); // 3 minutes
     } catch (error: any) {
@@ -172,7 +170,7 @@ export function BattleComponent() {
   return (
     <div className="mt-4">
       <h2 className="text-xl font-bold mb-6">Practice Battle</h2>
-      
+
       {isLoading ? (
         <div className="flex justify-center my-8">
           <svg className="animate-spin h-8 w-8 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -191,7 +189,7 @@ export function BattleComponent() {
         <div>
           <div className="bg-gray-800 rounded-lg p-6 mb-6">
             <h3 className="text-lg font-medium mb-4">Select Character</h3>
-            
+
             <select
               value={selectedCharacter}
               onChange={(e) => setSelectedCharacter(e.target.value)}
@@ -203,7 +201,7 @@ export function BattleComponent() {
                 </option>
               ))}
             </select>
-            
+
             <button
               onClick={startBattle}
               disabled={isBattling || !selectedCharacter || cooldown !== null}
@@ -226,11 +224,11 @@ export function BattleComponent() {
               )}
             </button>
           </div>
-          
+
           {battleResult && opponent && (
             <div className="bg-gray-800 rounded-lg p-6">
               <h3 className="text-lg font-medium mb-4">Battle Result</h3>
-              
+
               <div className="flex justify-between items-center mb-6">
                 <div className="text-center flex-1">
                   <div className="font-bold text-lg">
@@ -240,15 +238,15 @@ export function BattleComponent() {
                     {characters.find(c => c.id === selectedCharacter)?.elo} Elo
                   </div>
                 </div>
-                
+
                 <div className="mx-4 font-bold text-2xl">VS</div>
-                
+
                 <div className="text-center flex-1">
                   <div className="font-bold text-lg">{opponent.name}</div>
                   <div className="text-sm text-gray-400">{opponent.elo} Elo</div>
                 </div>
               </div>
-              
+
               <div className="mb-4">
                 <div className="text-center text-xl font-bold mb-2">
                   {battleResult.isDraw ? (

@@ -9,7 +9,7 @@ import {
 
 // Discord API 설정
 const DISCORD_API_URL = 'https://discord.com/api/v10';
-const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+const CLIENT_ID = "1088729716317495367";
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || `${process.env.VERCEL_URL || 'http://localhost:3000'}/auth/callback`;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -18,7 +18,7 @@ const GUILD_ID = process.env.DISCORD_GUILD_ID;
 export class DiscordAPIError extends Error {
   status: number;
   code: string;
-  
+
   constructor(message: string, status: number, code: string = 'DISCORD_API_ERROR') {
     super(message);
     this.name = 'DiscordAPIError';
@@ -84,10 +84,10 @@ export async function exchangeCodeForToken(code: string): Promise<DiscordToken> 
   }
 
   const data = await response.json();
-  
+
   // 만료 시간 계산
   const expiresAt = Date.now() + data.expires_in * 1000;
-  
+
   return {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
@@ -122,35 +122,35 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
   }
 
   const data = await response.json();
-  
+
   // 만료 시간 계산
   const expiresAt = Date.now() + data.expires_in * 1000;
-  
+
   const newToken = {
     access_token: data.access_token,
     refresh_token: data.refresh_token,
     expires_at: expiresAt,
   };
-  
+
   // 토큰 저장
   await saveDiscordToken(userId, newToken);
-  
+
   return newToken;
 }
 
 // 유효한 액세스 토큰 가져오기 (필요시 갱신)
 export async function getValidAccessToken(userId: string): Promise<string> {
   const token = await getDiscordToken(userId);
-  
+
   if (!token) {
     throw new DiscordAPIError('User token not found', 401, 'TOKEN_NOT_FOUND');
   }
-  
+
   // 토큰이 유효한지 확인
   if (isTokenValid(token)) {
     return token.access_token;
   }
-  
+
   // 토큰이 만료되었다면 갱신 시도
   try {
     const newToken = await refreshToken(userId, token.refresh_token);
@@ -190,9 +190,9 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
   if (!GUILD_ID) {
     throw new DiscordAPIError('Guild ID not configured', 500, 'GUILD_ID_MISSING');
   }
-  
+
   const response = await fetch(
-    `${DISCORD_API_URL}/users/@me/guilds/${GUILD_ID}/member`, 
+    `${DISCORD_API_URL}/users/@me/guilds/${GUILD_ID}/member`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -205,7 +205,7 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
     if (response.status === 404) {
       return [];
     }
-    
+
     const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
     throw new DiscordAPIError(
       data.error || `Failed to fetch guild roles: ${response.status}`,

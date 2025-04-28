@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BattleHistory } from './BattleHistory';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 
 interface Character {
   id: string;
@@ -21,7 +22,7 @@ interface CharacterDetailProps {
 }
 
 export function CharacterDetail({ id }: CharacterDetailProps) {
-  const { address, isConnected, authHeader } = useWeb3();
+  const { user, isConnected } = useDiscordAuth();
   const [character, setCharacter] = useState<Character | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -100,7 +101,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   };
 
   const startBattle = async () => {
-    if (!authHeader || !character || isBattling) return;
+    if (!user?.id || !character || isBattling) return;
 
     try {
       setIsBattling(true);
@@ -110,9 +111,11 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authHeader,
         },
-        body: JSON.stringify({ characterId: id }),
+        body: JSON.stringify({ 
+          characterId: id,
+          userId: user.id 
+        }),
       });
 
       const data = await response.json();
@@ -120,7 +123,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       if (!response.ok) {
         if (response.status === 429 && data.error) {
           // Cooldown active
-          const match = data.error.match(/(\\d+)\\s+seconds/);
+          const match = data.error.match(/(\d+)\s+seconds/);
           if (match && match[1]) {
             startCooldownTimer(parseInt(match[1]));
           }
@@ -159,7 +162,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   };
 
   const deleteCharacter = async () => {
-    if (!authHeader || !character || isDeleting) return;
+    if (!user?.id || !character || isDeleting) return;
 
     if (!confirm('Are you sure you want to delete this character? This action cannot be undone.')) {
       return;
@@ -171,8 +174,9 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       const response = await fetch(`/api/character/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': authHeader,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ userId: user.id }),
       });
 
       if (!response.ok) {
@@ -191,7 +195,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   if (isLoading) {
     return (
       <div className="flex justify-center my-8">
-        <svg className="animate-spin h-8 w-8 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <svg className="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
@@ -210,7 +214,8 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
     );
   }
 
-  const isOwner = isConnected && address?.toLowerCase() === character.owner.toLowerCase();
+  // Check if current user is the owner by comparing Discord ID
+  const isOwner = isConnected && user?.id === character.owner;
 
   return (
     <div>
@@ -241,7 +246,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
               disabled={isBattling || cooldown !== null}
               className={`w-full py-3 rounded-md font-bold text-center ${cooldown !== null
                 ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-purple-600 hover:bg-purple-700'}`}
+                : 'bg-indigo-600 hover:bg-indigo-700'}`}
             >
               {isBattling ? (
                 <div className="flex items-center justify-center gap-2">

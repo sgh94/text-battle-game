@@ -1,31 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 
 interface CreateCharacterModalProps {
-  authHeader: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export function CreateCharacterModal({
-  authHeader,
   onClose,
   onSuccess,
 }: CreateCharacterModalProps) {
-  const { signAuthMessage } = useWeb3();
+  const { user } = useDiscordAuth();
   const [name, setName] = useState('');
   const [traits, setTraits] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [currentAuthHeader, setCurrentAuthHeader] = useState(authHeader);
-
-  // Update current state when authHeader changes
-  useEffect(() => {
-    if (authHeader) {
-      setCurrentAuthHeader(authHeader);
-    }
-  }, [authHeader]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,21 +26,10 @@ export function CreateCharacterModal({
       return;
     }
 
-    // Try to create a new auth header if one doesn't exist
-    let header = currentAuthHeader;
-    if (!header) {
-      try {
-        const newAuthHeader = await signAuthMessage();
-        if (!newAuthHeader) {
-          setError('Failed to authenticate. Please try again.');
-          return;
-        }
-        header = newAuthHeader;
-        setCurrentAuthHeader(newAuthHeader);
-      } catch (error: any) {
-        setError(error?.message || 'Authentication failed');
-        return;
-      }
+    // 사용자 ID 확인
+    if (!user?.id) {
+      setError('No user ID found. Please reconnect your Discord account.');
+      return;
     }
 
     try {
@@ -60,24 +40,18 @@ export function CreateCharacterModal({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': header,
         },
-        body: JSON.stringify({ name, traits }),
+        body: JSON.stringify({ 
+          name, 
+          traits, 
+          userId: user.id,
+          discordUsername: user.username
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        // If authentication error, try to create a new header
-        if (response.status === 401) {
-          const newHeader = await signAuthMessage();
-          if (newHeader) {
-            setCurrentAuthHeader(newHeader);
-            throw new Error('Authentication expired. Please try again.');
-          } else {
-            throw new Error('Failed to re-authenticate. Please reconnect your wallet.');
-          }
-        }
         throw new Error(data.error || 'Failed to create character');
       }
 
@@ -104,7 +78,7 @@ export function CreateCharacterModal({
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Enter character name"
             />
           </div>
@@ -118,7 +92,7 @@ export function CreateCharacterModal({
               value={traits}
               onChange={(e) => setTraits(e.target.value)}
               rows={4}
-              className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Describe your character's traits, abilities, and personality"
             />
           </div>
@@ -138,7 +112,7 @@ export function CreateCharacterModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md flex items-center gap-2"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md flex items-center gap-2"
             >
               {isSubmitting && (
                 <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

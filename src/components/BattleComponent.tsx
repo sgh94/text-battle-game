@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 
 interface Character {
   id: string;
@@ -14,6 +15,7 @@ interface Character {
 }
 
 export function BattleComponent() {
+  const { user, isConnected } = useDiscordAuth();
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedCharacter, setSelectedCharacter] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +26,7 @@ export function BattleComponent() {
   const [cooldownTimer, setCooldownTimer] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (isConnected && address) {
+    if (isConnected && user?.id) {
       fetchCharacters();
       checkCooldown();
     } else {
@@ -34,14 +36,14 @@ export function BattleComponent() {
     return () => {
       if (cooldownTimer) clearInterval(cooldownTimer);
     };
-  }, [isConnected, address]);
+  }, [isConnected, user?.id]);
 
   const fetchCharacters = async () => {
-    if (!address) return;
+    if (!user?.id) return;
 
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/character?address=${address}`);
+      const response = await fetch(`/api/character?userId=${user.id}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -60,10 +62,10 @@ export function BattleComponent() {
   };
 
   const checkCooldown = async () => {
-    if (!address) return;
+    if (!user?.id) return;
 
     try {
-      const response = await fetch(`/api/user/cooldown?address=${address}`);
+      const response = await fetch(`/api/user/cooldown?userId=${user.id}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -99,7 +101,7 @@ export function BattleComponent() {
   };
 
   const startBattle = async () => {
-    if (!authHeader || !selectedCharacter || isBattling) return;
+    if (!user?.id || !selectedCharacter || isBattling) return;
 
     try {
       setIsBattling(true);
@@ -110,9 +112,11 @@ export function BattleComponent() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': authHeader,
         },
-        body: JSON.stringify({ characterId: selectedCharacter }),
+        body: JSON.stringify({ 
+          characterId: selectedCharacter,
+          userId: user.id 
+        }),
       });
 
       const data = await response.json();
@@ -120,7 +124,7 @@ export function BattleComponent() {
       if (!response.ok) {
         if (response.status === 429 && data.error) {
           // Cooldown active
-          const match = data.error.match(/(\\d+)\\s+seconds/);
+          const match = data.error.match(/(\d+)\s+seconds/);
           if (match && match[1]) {
             startCooldownTimer(parseInt(match[1]));
           }
@@ -159,7 +163,7 @@ export function BattleComponent() {
   if (!isConnected) {
     return (
       <div className="mt-8 text-center">
-        <p>Connect your wallet to battle with your characters</p>
+        <p>Connect with Discord to battle with your characters</p>
         <Link href="/" className="text-blue-400 hover:underline mt-4 inline-block">
           Go to Home
         </Link>
@@ -173,7 +177,7 @@ export function BattleComponent() {
 
       {isLoading ? (
         <div className="flex justify-center my-8">
-          <svg className="animate-spin h-8 w-8 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <svg className="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
@@ -207,7 +211,7 @@ export function BattleComponent() {
               disabled={isBattling || !selectedCharacter || cooldown !== null}
               className={`w-full py-3 rounded-md font-bold ${cooldown !== null
                 ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-purple-600 hover:bg-purple-700'}`}
+                : 'bg-indigo-600 hover:bg-indigo-700'}`}
             >
               {isBattling ? (
                 <div className="flex items-center justify-center gap-2">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 import { getLeagueInfo } from '@/lib/discord-roles';
 import Link from 'next/link';
@@ -8,12 +8,10 @@ import Link from 'next/link';
 export function LeagueSelector() {
   const { user } = useDiscordAuth();
   const [expandedLeague, setExpandedLeague] = useState<string | null>(null);
+  const [allLeagues, setAllLeagues] = useState<string[]>(['general', 'veteran', 'community', 'morse']);
 
-  if (!user) {
-    return null;
-  }
-
-  const leagues = user.leagues || ['general'];
+  // Show all available leagues, even if user doesn't have access to them
+  const leagues = allLeagues;
 
   const toggleExpand = (leagueId: string) => {
     if (expandedLeague === leagueId) {
@@ -21,6 +19,12 @@ export function LeagueSelector() {
     } else {
       setExpandedLeague(leagueId);
     }
+  };
+
+  // Check if user has access to a league
+  const hasLeagueAccess = (leagueId: string) => {
+    if (!user || !user.leagues) return false;
+    return user.leagues.includes(leagueId);
   };
 
   return (
@@ -31,11 +35,16 @@ export function LeagueSelector() {
         {leagues.map(leagueId => {
           const leagueInfo = getLeagueInfo(leagueId);
           const isExpanded = expandedLeague === leagueId;
+          const userHasAccess = hasLeagueAccess(leagueId);
           
           return (
             <div 
               key={leagueId}
-              className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700 hover:border-gray-600 transition"
+              className={`bg-gray-800 rounded-lg overflow-hidden border ${
+                userHasAccess 
+                  ? 'border-gray-600 hover:border-gray-500' 
+                  : 'border-gray-700'
+              } transition`}
             >
               <div 
                 className="p-4 cursor-pointer flex justify-between items-center"
@@ -48,7 +57,10 @@ export function LeagueSelector() {
                     <p className="text-sm text-gray-400 line-clamp-1">{leagueInfo.description}</p>
                   </div>
                 </div>
-                <div>
+                <div className="flex items-center">
+                  {!userHasAccess && (
+                    <span className="mr-2 px-2 py-1 text-xs bg-gray-700 rounded-md">No Access</span>
+                  )}
                   <svg 
                     className={`w-5 h-5 transition-transform ${isExpanded ? 'transform rotate-180' : ''}`} 
                     fill="none" 
@@ -76,12 +88,19 @@ export function LeagueSelector() {
                     >
                       View {leagueInfo.name} Rankings
                     </Link>
-                    <Link 
-                      href={`/battle?league=${leagueId}`}
-                      className="text-sm text-center py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md"
-                    >
-                      Battle in {leagueInfo.name}
-                    </Link>
+                    
+                    {userHasAccess ? (
+                      <Link 
+                        href={`/battle?league=${leagueId}`}
+                        className="text-sm text-center py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md"
+                      >
+                        Battle in {leagueInfo.name}
+                      </Link>
+                    ) : (
+                      <div className="text-sm text-center py-2 bg-gray-700 text-gray-500 rounded-md cursor-not-allowed">
+                        Need Discord Role Access to Battle
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -107,10 +107,12 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       setIsBattling(true);
       setBattleResult(null);
 
+      // Create Authorization header with the user ID as the token
       const response = await fetch('/api/battle', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.id}:${Date.now()}:discord_auth_${user.id}`
         },
         body: JSON.stringify({ 
           characterId: id,
@@ -175,12 +177,13 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId: user.id }),
+          'Authorization': `Bearer ${user.id}:${Date.now()}:discord_auth_${user.id}`
+        }
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete character');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete character');
       }
 
       // Redirect to the home page after successful deletion

@@ -9,7 +9,7 @@ export const ROLE_TO_LEAGUE_MAP: Record<string, string> = {
   '1366310235605696512': 'morse'           // Morse Trainer
 };
 
-// League information
+// All League information 
 export const LEAGUES = {
   general: {
     id: 'general',

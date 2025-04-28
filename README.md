@@ -1,20 +1,21 @@
 # Text Battle Game
 
-A web3-based text battle game where characters fight based on their traits using LLM decision making.
+A Discord-based text battle game where characters fight based on their traits using LLM decision making.
 
 ## Features
 
-1. Web3 wallet authentication (RainbowKit, MetaMask, WalletConnect, etc.)
-2. Create up to 5 characters per user with name, traits, ELO score, and ranking
+1. Discord authentication and role-based leagues
+2. Create one character per user with name, traits, ELO score, and ranking
 3. Battle system that matches characters based on ELO score
 4. Battles are decided by an LLM based on character traits
 5. Character stats and battle history tracking
 6. 3-minute cooldown between battles
+7. Character prompt updates (once per 12 hours)
 
 ## Tech Stack
 
 - Next.js
-- Web3 Authentication (RainbowKit, wagmi, viem, ethers)
+- Discord OAuth2 Authentication
 - Vercel KV for database
 - OpenAI API for battle decisions
 - TailwindCSS for styling
@@ -26,7 +27,7 @@ A web3-based text battle game where characters fight based on their traits using
 - Node.js 16.8 or later
 - Vercel account
 - OpenAI API key
-- WalletConnect Project ID (for wallet connection)
+- Discord Developer Application
 
 ### Local Development
 
@@ -49,7 +50,14 @@ KV_REST_API_READ_ONLY_TOKEN=your_read_only_token
 KV_REST_API_URL=your_kv_api_url
 REDIS_URL=your_redis_url
 OPENAI_API_KEY=your_openai_api_key
-NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id
+
+# Discord OAuth Configuration
+DISCORD_CLIENT_ID=your_discord_client_id
+DISCORD_CLIENT_SECRET=your_discord_client_secret
+DISCORD_REDIRECT_URI=your_redirect_uri
+DISCORD_GUILD_ID=your_discord_guild_id
+NEXT_PUBLIC_DISCORD_CLIENT_ID=your_discord_client_id
+NEXT_PUBLIC_DISCORD_REDIRECT_URI=your_redirect_uri
 ```
 
 4. Run the development server
@@ -58,6 +66,14 @@ npm run dev
 ```
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+### Discord Setup
+
+1. Create a new application in the [Discord Developer Portal](https://discord.com/developers/applications)
+2. Set up OAuth2 with the following redirect URI: `http://localhost:3000/auth/callback` (for local development)
+3. Add a bot to your application
+4. Invite the bot to your Discord server
+5. Copy the Client ID, Client Secret, and Guild ID (Server ID) to your environment variables
 
 ### Deployment
 
@@ -74,33 +90,35 @@ This application is configured for deployment on Vercel:
 /src
   /app - Next.js app router
     /api - API routes
+      /discord - Discord authentication endpoints
+    /auth - Discord auth callback handler
     /account - Account page
     /battle - Battle page
     /character - Character details
     /ranking - Ranking page
   /components - React components
-  /background - Background processes and providers
-  /common - Common utilities and configuration
-    /atoms - State management with Jotai
-  /lib - Utility functions
+    /providers - Context providers
   /hooks - Custom React hooks
+  /lib - Utility functions
+  /services - Service functions
+  /types - TypeScript definitions
 ```
 
 ## API Routes
 
+- `/api/discord/auth` - Discord authentication
+- `/api/discord/refresh-roles` - Refresh Discord roles
 - `/api/user` - User management
 - `/api/character` - Character management
 - `/api/battle` - Battle system
 - `/api/ranking` - Ranking system
 
-## Wallet Connection
+## Discord Authentication
 
-The app uses RainbowKit for a user-friendly wallet connection experience, supporting:
-- MetaMask
-- WalletConnect
-- Coinbase Wallet
-- Phantom Wallet
-- And more...
+The app uses Discord OAuth2 for authentication and role management, supporting:
+- Discord account login
+- Role-based league assignment
+- Automatic role updates
 
 ## License
 

@@ -16,7 +16,7 @@ export function CreateCharacterModal({
   const { user } = useDiscordAuth();
   const [name, setName] = useState('');
   const [traits, setTraits] = useState('');
-  const [selectedLeague, setSelectedLeague] = useState(user?.primaryLeague || 'bronze');
+  const [selectedLeague, setSelectedLeague] = useState(user?.primaryLeague || 'general');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -66,12 +66,20 @@ export function CreateCharacterModal({
         throw new Error(data.error || 'Failed to create character');
       }
 
+      console.log('Character created successfully:', data);
       onSuccess();
     } catch (error: any) {
+      console.error('Error creating character:', error);
       setError(error.message || 'An error occurred');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Get available leagues based on user roles
+  const getAvailableLeagues = () => {
+    if (!user?.leagues) return ['general'];
+    return user.leagues;
   };
 
   return (
@@ -109,25 +117,33 @@ export function CreateCharacterModal({
           </div>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-1">
-              League
+            <label className="block text-sm font-medium mb-2">
+              Choose a League
             </label>
-            <div className="flex flex-wrap gap-2">
-              {user?.leagues && user.leagues.map((league) => {
+            <div className="grid grid-cols-1 gap-3">
+              {getAvailableLeagues().map(league => {
                 const leagueInfo = getLeagueInfo(league);
                 return (
                   <button
                     key={league}
                     type="button"
                     onClick={() => setSelectedLeague(league)}
-                    className={`px-3 py-2 rounded transition-colors flex items-center ${
+                    className={`text-left px-4 py-3 rounded transition-colors border ${
                       selectedLeague === league 
-                        ? 'bg-indigo-600 text-white' 
-                        : 'bg-gray-700 hover:bg-gray-600'
+                        ? 'bg-gray-700 border-indigo-500' 
+                        : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
                     }`}
                   >
-                    <span className="mr-1">{leagueInfo.icon}</span>
-                    {leagueInfo.name}
+                    <div className="flex items-center">
+                      <span className="mr-2 text-xl">{leagueInfo.icon}</span>
+                      <div>
+                        <div className="font-medium">{leagueInfo.name}</div>
+                        <div className="text-sm text-gray-400">{leagueInfo.description}</div>
+                        <div className="text-xs mt-1 text-gray-500">
+                          <span className="font-medium">Eligibility:</span> {leagueInfo.eligibility}
+                        </div>
+                      </div>
+                    </div>
                   </button>
                 );
               })}

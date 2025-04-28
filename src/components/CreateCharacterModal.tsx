@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useDiscordAuth } from '@/hooks/useDiscordAuth';
+import { getLeagueInfo } from '@/lib/discord-roles';
 
 interface CreateCharacterModalProps {
   onClose: () => void;
@@ -15,6 +16,7 @@ export function CreateCharacterModal({
   const { user } = useDiscordAuth();
   const [name, setName] = useState('');
   const [traits, setTraits] = useState('');
+  const [selectedLeague, setSelectedLeague] = useState(user?.primaryLeague || 'bronze');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -43,7 +45,6 @@ export function CreateCharacterModal({
       }
 
       // Create Authorization header with the user ID as the token
-      // This is a simple approach - in a production environment, you would use a proper token
       const response = await fetch('/api/character', {
         method: 'POST',
         headers: {
@@ -54,7 +55,8 @@ export function CreateCharacterModal({
           name, 
           traits, 
           userId: user.id,
-          discordUsername: user.username
+          discordUsername: user.username,
+          league: selectedLeague
         }),
       });
 
@@ -92,7 +94,7 @@ export function CreateCharacterModal({
             />
           </div>
 
-          <div className="mb-6">
+          <div className="mb-4">
             <label htmlFor="traits" className="block text-sm font-medium mb-1">
               Character Traits
             </label>
@@ -104,6 +106,32 @@ export function CreateCharacterModal({
               className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Describe your character's traits, abilities, and personality"
             />
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-1">
+              League
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {user?.leagues && user.leagues.map((league) => {
+                const leagueInfo = getLeagueInfo(league);
+                return (
+                  <button
+                    key={league}
+                    type="button"
+                    onClick={() => setSelectedLeague(league)}
+                    className={`px-3 py-2 rounded transition-colors flex items-center ${
+                      selectedLeague === league 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
+                  >
+                    <span className="mr-1">{leagueInfo.icon}</span>
+                    {leagueInfo.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {error && (

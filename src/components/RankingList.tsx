@@ -29,8 +29,8 @@ export function RankingList() {
   const [rankings, setRankings] = useState<Character[]>([]);
   const [userRanking, setUserRanking] = useState<UserRanking | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedLeague, setSelectedLeague] = useState('bronze');
-  const [availableLeagues, setAvailableLeagues] = useState<string[]>(['bronze']);
+  const [selectedLeague, setSelectedLeague] = useState('general');
+  const [availableLeagues, setAvailableLeagues] = useState<string[]>(['general']);
 
   useEffect(() => {
     // Set available leagues based on user access
@@ -59,6 +59,7 @@ export function RankingList() {
       
       if (response.ok) {
         const data = await response.json();
+        console.log(`Rankings for ${leagueId}:`, data.rankings);
         setRankings(data.rankings || []);
         
         // If user is logged in, fetch their ranking
@@ -67,6 +68,7 @@ export function RankingList() {
           if (userRankingResponse.ok) {
             const userRankingData = await userRankingResponse.json();
             if (userRankingData.ranking) {
+              console.log(`User ranking for ${leagueId}:`, userRankingData.ranking);
               setUserRanking(userRankingData.ranking);
             } else {
               setUserRanking(null);
@@ -83,6 +85,7 @@ export function RankingList() {
 
   // Format owner address
   const formatAddress = (addr: string) => {
+    if (!addr) return '';
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
@@ -98,14 +101,14 @@ export function RankingList() {
         <h2 className="text-xl font-bold">Rankings</h2>
         
         {/* League selector */}
-        <div className="flex space-x-2">
+        <div className="flex space-x-2 overflow-x-auto pb-2">
           {availableLeagues.map(league => {
             const leagueInfo = getLeagueInfo(league);
             return (
               <button
                 key={league}
                 onClick={() => setSelectedLeague(league)}
-                className={`px-3 py-1 rounded text-sm flex items-center ${
+                className={`px-3 py-1 rounded text-sm flex items-center whitespace-nowrap ${
                   selectedLeague === league 
                     ? 'bg-gray-700 font-bold' 
                     : 'bg-gray-800 hover:bg-gray-700'
@@ -130,6 +133,11 @@ export function RankingList() {
       ) : rankings.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p>No rankings available for {getLeagueInfo(selectedLeague).name}</p>
+          {user && (
+            <p className="mt-2 text-gray-400">
+              Create a character in this league to be the first on the leaderboard!
+            </p>
+          )}
         </div>
       ) : (
         <div className="bg-gray-800 rounded-lg overflow-hidden">
@@ -192,6 +200,18 @@ export function RankingList() {
           </table>
         </div>
       )}
+
+      <div className="mt-4 bg-gray-800 rounded-lg p-4">
+        <h3 className="text-lg font-medium mb-2">
+          {getLeagueInfo(selectedLeague).icon} {getLeagueInfo(selectedLeague).name}
+        </h3>
+        <p className="text-gray-400 text-sm">
+          {getLeagueInfo(selectedLeague).description}
+        </p>
+        <p className="text-gray-500 text-xs mt-2">
+          <span className="font-medium">Eligibility:</span> {getLeagueInfo(selectedLeague).eligibility}
+        </p>
+      </div>
     </div>
   );
 }

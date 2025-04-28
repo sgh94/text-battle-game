@@ -1,17 +1,20 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { getDiscordAuthUrl } from '@/lib/discord-api';
 
+// Discord 사용자 정보 타입 정의
 interface DiscordUser {
   id: string;
   username: string;
   discriminator: string;
-  avatar: string;
+  avatar: string | null;
   roles: string[];
-  primaryLeague?: string;
-  leagues?: string[];
+  leagues: string[];
+  primaryLeague: string;
 }
 
+// Discord 인증 Context 타입 정의
 interface DiscordAuthContextType {
   user: DiscordUser | null;
   isConnected: boolean;
@@ -22,12 +25,10 @@ interface DiscordAuthContextType {
   refreshRoles: () => Promise<void>;
 }
 
-// Discord authentication related constants
-const DISCORD_CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
-const DISCORD_REDIRECT_URI = process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || `${window?.location?.origin}/auth/callback`;
+// 로컬 스토리지 키
 const AUTH_STORAGE_KEY = 'text-battle-discord-auth';
 
-// Create context for Discord authentication
+// Context 생성
 const DiscordAuthContext = createContext<DiscordAuthContextType>({
   user: null,
   isConnected: false,
@@ -38,74 +39,70 @@ const DiscordAuthContext = createContext<DiscordAuthContextType>({
   refreshRoles: async () => {},
 });
 
-// Function to retrieve Discord authentication URL
-const getDiscordAuthUrl = () => {
-  if (!DISCORD_CLIENT_ID) {
-    console.error('Discord client ID is not defined');
-    return '';
-  }
-
-  const scope = 'identify guilds guilds.members.read';
-  return `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scope)}`;
-};
-
-// Provider component for Discord authentication
-export function DiscordAuthProvider({ children }: { children: React.ReactNode }) {
+// Provider 컴포넌트
+export function DiscordAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<DiscordUser | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check for existing authentication on mount
+  // 초기화 시 로컬 스토리지에서 인증 정보 로드
   useEffect(() => {
-    const checkAuth = () => {
+    const loadAuthData = () => {
       try {
-        const authData = localStorage.getItem(AUTH_STORAGE_KEY);
-        if (authData) {
-          const userData = JSON.parse(authData) as DiscordUser;
+        // 브라우저 환경일 때만 실행
+        if (typeof window === 'undefined') return;
+        
+        const storedData = localStorage.getItem(AUTH_STORAGE_KEY);
+        
+        if (storedData) {
+          const userData = JSON.parse(storedData) as DiscordUser;
           setUser(userData);
           setIsConnected(true);
         }
       } catch (err) {
-        console.error('Error checking authentication:', err);
+        console.error('Error loading authentication data:', err);
         localStorage.removeItem(AUTH_STORAGE_KEY);
       }
     };
 
-    checkAuth();
+    loadAuthData();
   }, []);
 
-  // Redirect to Discord OAuth
+  // Discord 로그인 페이지로 리디렉션
   const login = () => {
     setIsConnecting(true);
     setError(null);
-    
-    const authUrl = getDiscordAuthUrl();
-    if (!authUrl) {
-      setError('Discord authentication is not properly configured');
+
+    try {
+      const authUrl = getDiscordAuthUrl();
+      window.location.href = authUrl;
+    } catch (err) {
       setIsConnecting(false);
-      return;
+      setError(err instanceof Error ? err.message : '인증 URL 생성 실패');
+      console.error('Error generating auth URL:', err);
     }
-    
-    window.location.href = authUrl;
   };
 
-  // Logout user
+  // 로그아웃
   const logout = () => {
     setUser(null);
     setIsConnected(false);
     localStorage.removeItem(AUTH_STORAGE_KEY);
   };
 
-  // Refresh user's Discord roles
+  // Discord 역할 갱신
   const refreshRoles = async () => {
-    if (!user || !user.id) return;
-    
+    if (!user || !user.id) {
+      setError('역할을 업데이트하려면 로그인해야 합니다.');
+      return;
+    }
+
+    setIsConnecting(true);
+    setError(null);
+
     try {
-      setIsConnecting(true);
-      setError(null);
-      
-      // Call API endpoint to refresh roles
+      // 역할 갱신 API 호출
       const response = await fetch('/api/discord/refresh-roles', {
         method: 'POST',
         headers: {
@@ -113,25 +110,33 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
         },
         body: JSON.stringify({ userId: user.id }),
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to refresh Discord roles');
+        const errorData = await response.json().catch(() => ({ error: '알 수 없는 오류', code: 'UNKNOWN_ERROR' }));
+        
+        // 토큰 만료 오류인 경우 자동 로그아웃
+        if (errorData.code === 'AUTH_EXPIRED') {
+          logout();
+          throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
+        }
+        
+        throw new Error(errorData.error || `역할 갱신 실패 (${response.status})`);
       }
-      
+
+      // 업데이트된 사용자 정보로 상태 갱신
       const updatedUser = await response.json();
-      
-      // Update user data with new roles
       setUser(updatedUser);
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
       
     } catch (err) {
+      setError(err instanceof Error ? err.message : '역할 갱신 실패');
       console.error('Error refreshing roles:', err);
-      setError(err instanceof Error ? err.message : 'Failed to refresh Discord roles');
     } finally {
       setIsConnecting(false);
     }
   };
 
+  // Context 값
   const value: DiscordAuthContextType = {
     user,
     isConnected,
@@ -149,7 +154,28 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
   );
 }
 
-// Hook to use Discord authentication
+// Hook export
 export function useDiscordAuth() {
   return useContext(DiscordAuthContext);
+}
+
+// 사용자 리그 접근 권한 체크 헬퍼 함수
+export function useLeagueAccess(leagueId: string) {
+  const { user, isConnected } = useDiscordAuth();
+  
+  if (!isConnected || !user) {
+    return false;
+  }
+  
+  return user.leagues.includes(leagueId);
+}
+
+// 캐릭터 액세스 권한 체크 헬퍼 함수 (계정당 하나의 캐릭터)
+export function useCharacterAccess() {
+  const { user, isConnected } = useDiscordAuth();
+  
+  return {
+    canAccess: isConnected && !!user,
+    userId: user?.id || null,
+  };
 }

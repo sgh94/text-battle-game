@@ -1,160 +1,121 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// Discord API configuration
-const DISCORD_API_URL = 'https://discord.com/api/v10';
-const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
-const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-const GUILD_ID = process.env.DISCORD_GUILD_ID;
-
-// League mappings based on Discord roles (same as in auth route)
-const ROLE_TO_LEAGUE_MAP: Record<string, string> = {
-  // Sample mapping - replace with actual Discord role IDs from your server
-  '123456789123456789': 'bronze',
-  '234567890234567890': 'silver',
-  '345678901345678901': 'gold',
-  '456789012456789012': 'platinum',
-};
-
-// Special roles that grant access to multiple leagues
-const SPECIAL_ROLES: Record<string, string[]> = {
-  '567890123567890123': ['gold', 'platinum'],
-  '678901234678901234': ['silver', 'gold'],
-};
-
-// In a real implementation, you would fetch the user's tokens from a database
-// Here we're using a mock function as placeholder
-async function getUserTokens(userId: string) {
-  // This is a placeholder - in a real implementation, you would fetch from your database
-  // For now, return a mock error to indicate this needs to be properly implemented
-  throw new Error('User not found or token expired. Please reconnect with Discord.');
-}
-
-// Fetch user's roles from Discord guild
-async function fetchUserGuildRoles(accessToken: string, userId: string) {
-  const response = await fetch(`${DISCORD_API_URL}/users/@me/guilds/${GUILD_ID}/member`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    // If user is not in the guild, return empty roles
-    if (response.status === 404) {
-      return { roles: [] };
-    }
-    throw new Error(`Failed to fetch guild roles: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-// Determine leagues based on Discord roles
-function determineUserLeagues(roles: string[]) {
-  const leagues = new Set<string>();
-  
-  // Always add bronze league as default
-  leagues.add('bronze');
-  
-  // Check role mappings
-  roles.forEach(roleId => {
-    const league = ROLE_TO_LEAGUE_MAP[roleId];
-    if (league) {
-      leagues.add(league);
-    }
-    
-    // Check special roles
-    const specialLeagues = SPECIAL_ROLES[roleId];
-    if (specialLeagues) {
-      specialLeagues.forEach(league => leagues.add(league));
-    }
-  });
-  
-  return Array.from(leagues);
-}
-
-// Get the highest priority league
-function getPrimaryLeague(leagues: string[]) {
-  // League priority order
-  const leaguePriority = ['platinum', 'gold', 'silver', 'bronze'];
-  
-  for (const league of leaguePriority) {
-    if (leagues.includes(league)) {
-      return league;
-    }
-  }
-  
-  return 'bronze'; // Default league
-}
+import { 
+  getValidAccessToken, 
+  fetchUserGuildRoles,
+  fetchDiscordUser,
+  DiscordAPIError
+} from '@/lib/discord-api';
+import { 
+  getDiscordUser, 
+  updateUserRoles 
+} from '@/lib/db';
+import { 
+  determineUserLeagues, 
+  getPrimaryLeague 
+} from '@/lib/discord-roles';
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await request.json();
     
     if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'User ID is required' },
+        { status: 400 }
+      );
     }
     
-    if (!CLIENT_ID || !CLIENT_SECRET || !GUILD_ID) {
-      return NextResponse.json({ error: 'Discord integration is not properly configured' }, { status: 500 });
-    }
+    // 1. 데이터베이스에서 사용자 정보 조회
+    const userProfile = await getDiscordUser(userId);
     
-    // In a real implementation, you would:
-    // 1. Fetch user's Discord token from your database
-    // 2. Check if token is valid/refresh if needed
-    // 3. Use token to fetch latest roles
+    if (!userProfile) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
     
     try {
-      // This would be replaced with actual database lookup in a real implementation
-      const { accessToken, username, discriminator, avatar } = await getUserTokens(userId);
+      // 2. 유효한 액세스 토큰 가져오기 (필요시 자동 갱신)
+      const accessToken = await getValidAccessToken(userId);
       
-      // Fetch user's guild roles
-      const guildData = await fetchUserGuildRoles(accessToken, userId);
+      // 3. Discord API를 통해 최신 역할 정보 가져오기
+      const updatedRoles = await fetchUserGuildRoles(accessToken, userId);
       
-      // Determine user's leagues based on roles
-      const userRoles = guildData.roles || [];
-      const leagues = determineUserLeagues(userRoles);
+      // 4. 역할 기반으로 리그 계산
+      const leagues = determineUserLeagues(updatedRoles);
       const primaryLeague = getPrimaryLeague(leagues);
       
-      // Prepare user data for response
-      const responseData = {
-        id: userId,
-        username,
-        discriminator,
-        avatar,
-        roles: userRoles,
+      // 5. 데이터베이스에 사용자 역할 및 리그 정보 업데이트
+      await updateUserRoles(userId, updatedRoles, leagues, primaryLeague);
+      
+      // 6. 갱신된 사용자 정보 반환
+      const updatedUserProfile = {
+        ...userProfile,
+        roles: updatedRoles,
         leagues,
         primaryLeague,
+        updatedAt: new Date().toISOString(),
       };
       
-      // In a real implementation, you would also update this information in your database
-      
-      return NextResponse.json(responseData);
+      return NextResponse.json(updatedUserProfile);
       
     } catch (error) {
-      // For demo purposes, return a mock response since we don't have a real database
-      // In a real implementation, this would be an error
+      // 토큰이 만료되었거나 갱신 실패한 경우
+      if (error instanceof DiscordAPIError && 
+          (error.code === 'TOKEN_NOT_FOUND' || error.code === 'TOKEN_REFRESH_FAILED')) {
+        
+        return NextResponse.json(
+          { 
+            error: 'Authentication expired. Please log in again.', 
+            code: 'AUTH_EXPIRED' 
+          },
+          { status: 401 }
+        );
+      }
       
-      const mockRoles = ['123456789123456789', '345678901345678901']; // Example mock roles
-      const leagues = determineUserLeagues(mockRoles);
-      const primaryLeague = getPrimaryLeague(leagues);
+      // 길드 멤버십 오류 (사용자가 서버에 없는 경우 등)
+      if (error instanceof DiscordAPIError && error.code === 'FETCH_ROLES_FAILED') {
+        // 사용자가 서버에 없거나 역할이 없는 경우 기본 리그로 설정
+        const defaultRoles: string[] = [];
+        const leagues = determineUserLeagues(defaultRoles);
+        const primaryLeague = getPrimaryLeague(leagues);
+        
+        // 데이터베이스에 기본 역할 및 리그 정보 업데이트
+        await updateUserRoles(userId, defaultRoles, leagues, primaryLeague);
+        
+        const updatedUserProfile = {
+          ...userProfile,
+          roles: defaultRoles,
+          leagues,
+          primaryLeague,
+          updatedAt: new Date().toISOString(),
+        };
+        
+        return NextResponse.json(updatedUserProfile);
+      }
       
-      const mockUser = {
-        id: userId,
-        username: 'MockUser',
-        discriminator: '0000',
-        avatar: null,
-        roles: mockRoles,
-        leagues,
-        primaryLeague,
-      };
-      
-      return NextResponse.json(mockUser);
+      // 기타 API 오류 처리
+      throw error;
     }
     
   } catch (error) {
     console.error('Discord role refresh error:', error);
+    
+    // Discord API 오류 처리
+    if (error instanceof DiscordAPIError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: error.status }
+      );
+    }
+    
+    // 기타 오류 처리
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to refresh Discord roles' },
+      { 
+        error: error instanceof Error ? error.message : 'Failed to refresh Discord roles',
+        code: 'UNKNOWN_ERROR'
+      },
       { status: 500 }
     );
   }

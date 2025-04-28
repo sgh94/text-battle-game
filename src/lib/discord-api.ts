@@ -9,7 +9,8 @@ import {
 
 // Discord API 설정
 const DISCORD_API_URL = 'https://discord.com/api/v10';
-const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+// Use a fallback client ID in case the environment variable is not set
+const CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1088729716317495367';
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || `${process.env.VERCEL_URL || 'http://localhost:3000'}/auth/callback`;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -59,12 +60,25 @@ export interface DiscordGuildMember {
 
 // 인증 코드를 토큰으로 교환
 export async function exchangeCodeForToken(code: string): Promise<DiscordToken> {
+  if (!CLIENT_ID) {
+    throw new Error('Discord client ID not configured');
+  }
+
+  if (!CLIENT_SECRET) {
+    throw new Error('Discord client secret not configured');
+  }
+
   const params = new URLSearchParams({
-    client_id: CLIENT_ID!,
-    client_secret: CLIENT_SECRET!,
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
     grant_type: 'authorization_code',
     code,
     redirect_uri: REDIRECT_URI,
+  });
+
+  console.log('Exchanging code for token with params:', {
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI
   });
 
   const response = await fetch(`${DISCORD_API_URL}/oauth2/token`, {
@@ -97,9 +111,13 @@ export async function exchangeCodeForToken(code: string): Promise<DiscordToken> 
 
 // 토큰 갱신
 export async function refreshToken(userId: string, refreshToken: string): Promise<DiscordToken> {
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    throw new Error('Discord client credentials not configured');
+  }
+
   const params = new URLSearchParams({
-    client_id: CLIENT_ID!,
-    client_secret: CLIENT_SECRET!,
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
   });
@@ -221,18 +239,25 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
 // OAuth2 인증 URL 생성
 export function getDiscordAuthUrl(): string {
   if (!CLIENT_ID) {
+    console.error('Discord client ID not configured');
     throw new Error('Discord client ID not configured');
   }
 
+  console.log('Using Discord Client ID:', CLIENT_ID);
+  
   const scope = 'identify guilds guilds.members.read';
   return `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scope)}`;
 }
 
 // Discord 사용자 토큰 취소 (로그아웃 시)
 export async function revokeToken(token: string): Promise<boolean> {
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    throw new Error('Discord client credentials not configured');
+  }
+
   const params = new URLSearchParams({
-    client_id: CLIENT_ID!,
-    client_secret: CLIENT_SECRET!,
+    client_id: CLIENT_ID,
+    client_secret: CLIENT_SECRET,
     token,
   });
 

@@ -17,6 +17,7 @@ export interface Character extends Record<string, unknown> {
   wins: number;
   losses: number;
   draws: number;
+  league: string; // Added league field
   createdAt: number;
 }
 
@@ -30,6 +31,7 @@ export interface Battle extends Record<string, unknown> {
   explanation: string; // Keep for backward compatibility
   narrative: string;   // Add narrative field for detailed battle description
   timestamp: number;
+  league: string;      // Added league field
 }
 
 // Response from LLM for battle decision
@@ -54,4 +56,12 @@ export interface ScoreMember {
 export interface RankingResult {
   member: string;
   score: number;
+}
+
+// User ranking data
+export interface UserRanking {
+  rank: number;
+  elo: number;
+  characterId: string;
+  characterName: string;
 }

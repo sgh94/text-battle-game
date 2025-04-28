@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const limit = parseInt(request.nextUrl.searchParams.get('limit') || '10');
     const offset = parseInt(request.nextUrl.searchParams.get('offset') || '0');
-    const league = request.nextUrl.searchParams.get('league') || 'bronze';
+    const league = request.nextUrl.searchParams.get('league') || 'general';
 
     // Get top characters by ELO for the specified league
     const rankingKey = `league:${league}:ranking`;
@@ -61,19 +61,34 @@ export async function GET(request: NextRequest) {
 
         if (!character) return null;
 
+        // Make sure to use the score from the ranking, not from the character object
+        // This ensures we display the most up-to-date ELO from the sorted set
         return {
           ...character,
           rank: offset + index + 1,
-          elo: item.score,
+          elo: item.score, // Use the score from the sorted set
         };
       })
     );
 
-    // Filter out null values and ensure characters are in the correct league
+    // Filter out null values and ensure characters are in the correct league or 'general'
     const filteredRankings = rankings
       .filter((ranking): ranking is Character & { rank: number, elo: number } => 
-        ranking !== null && (!ranking.league || ranking.league === league)
+        ranking !== null && (
+          !ranking.league || 
+          ranking.league === league || 
+          league === 'general'
+        )
       );
+
+    // Debug logging - useful for troubleshooting
+    console.log(`League ${league} rankings - found ${filteredRankings.length} characters`);
+    console.log('First few rankings:', filteredRankings.slice(0, 3).map(r => ({
+      id: r.id,
+      name: r.name,
+      elo: r.elo,
+      rank: r.rank
+    })));
 
     return NextResponse.json({ rankings: filteredRankings });
   } catch (error) {

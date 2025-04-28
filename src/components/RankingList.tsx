@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useDiscordAuth } from '@/hooks/useDiscordAuth';
+import { getLeagueInfo } from '@/lib/discord-roles';
 
 interface Character {
   id: string;
@@ -12,24 +14,65 @@ interface Character {
   wins: number;
   losses: number;
   draws: number;
+  league: string;
+}
+
+interface UserRanking {
+  characterId: string;
+  characterName: string;
+  rank: number;
+  elo: number;
 }
 
 export function RankingList() {
+  const { user } = useDiscordAuth();
   const [rankings, setRankings] = useState<Character[]>([]);
+  const [userRanking, setUserRanking] = useState<UserRanking | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedLeague, setSelectedLeague] = useState('bronze');
+  const [availableLeagues, setAvailableLeagues] = useState<string[]>(['bronze']);
 
   useEffect(() => {
-    fetchRankings();
-  }, []);
+    // Set available leagues based on user access
+    if (user?.leagues && user.leagues.length > 0) {
+      setAvailableLeagues(user.leagues);
+      // Default to the user's primary league if they have one
+      if (user.primaryLeague) {
+        setSelectedLeague(user.primaryLeague);
+      }
+    }
+  }, [user]);
 
-  const fetchRankings = async () => {
+  useEffect(() => {
+    if (selectedLeague) {
+      fetchRankings(selectedLeague);
+    }
+  }, [selectedLeague]);
+
+  const fetchRankings = async (leagueId: string) => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/ranking?limit=10');
+      const userId = user?.id;
+      
+      // Fetch top 10 rankings for the selected league
+      const response = await fetch(`/api/ranking?league=${leagueId}&limit=10`);
       
       if (response.ok) {
         const data = await response.json();
         setRankings(data.rankings || []);
+        
+        // If user is logged in, fetch their ranking
+        if (userId) {
+          const userRankingResponse = await fetch(`/api/ranking/user?userId=${userId}&league=${leagueId}`);
+          if (userRankingResponse.ok) {
+            const userRankingData = await userRankingResponse.json();
+            if (userRankingData.ranking) {
+              setUserRanking(userRankingData.ranking);
+            } else {
+              setUserRanking(null);
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching rankings:', error);
@@ -43,9 +86,39 @@ export function RankingList() {
     return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
   };
 
+  // Check if user ranking is already in top 10
+  const isUserInTopRankings = () => {
+    if (!userRanking) return false;
+    return rankings.some(char => char.id === userRanking.characterId);
+  };
+
   return (
     <div className="mt-4">
-      <h2 className="text-xl font-bold mb-4">Rankings</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">Rankings</h2>
+        
+        {/* League selector */}
+        <div className="flex space-x-2">
+          {availableLeagues.map(league => {
+            const leagueInfo = getLeagueInfo(league);
+            return (
+              <button
+                key={league}
+                onClick={() => setSelectedLeague(league)}
+                className={`px-3 py-1 rounded text-sm flex items-center ${
+                  selectedLeague === league 
+                    ? 'bg-gray-700 font-bold' 
+                    : 'bg-gray-800 hover:bg-gray-700'
+                }`}
+                style={selectedLeague === league ? { borderColor: leagueInfo.color } : {}}
+              >
+                <span className="mr-1">{leagueInfo.icon}</span>
+                {leagueInfo.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {isLoading ? (
         <div className="flex justify-center my-8">
@@ -56,7 +129,7 @@ export function RankingList() {
         </div>
       ) : rankings.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <p>No rankings available yet</p>
+          <p>No rankings available for {getLeagueInfo(selectedLeague).name}</p>
         </div>
       ) : (
         <div className="bg-gray-800 rounded-lg overflow-hidden">
@@ -72,7 +145,12 @@ export function RankingList() {
             </thead>
             <tbody>
               {rankings.map((character) => (
-                <tr key={character.id} className="border-t border-gray-700 hover:bg-gray-700 transition">
+                <tr 
+                  key={character.id} 
+                  className={`border-t border-gray-700 hover:bg-gray-700 transition ${
+                    userRanking?.characterId === character.id ? 'bg-purple-900 bg-opacity-30' : ''
+                  }`}
+                >
                   <td className="px-4 py-3">{character.rank}</td>
                   <td className="px-4 py-3">
                     <Link href={`/character/${character.id}`} className="text-purple-400 hover:text-purple-300">
@@ -88,6 +166,28 @@ export function RankingList() {
                   </td>
                 </tr>
               ))}
+              
+              {/* Show user's ranking if not in top 10 */}
+              {userRanking && !isUserInTopRankings() && (
+                <>
+                  <tr className="border-t border-gray-600">
+                    <td colSpan={5} className="px-4 py-2 text-center text-xs text-gray-500">
+                      • • •
+                    </td>
+                  </tr>
+                  <tr className="border-t border-gray-700 bg-purple-900 bg-opacity-30">
+                    <td className="px-4 py-3">{userRanking.rank}</td>
+                    <td className="px-4 py-3">
+                      <Link href={`/character/${userRanking.characterId}`} className="text-purple-400 hover:text-purple-300">
+                        {userRanking.characterName}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3 text-gray-400">{user ? user.username : ''}</td>
+                    <td className="px-4 py-3 text-right font-bold">{userRanking.elo}</td>
+                    <td className="px-4 py-3"></td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
         </div>

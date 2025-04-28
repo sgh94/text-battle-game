@@ -25,12 +25,16 @@ export function CharactersList() {
   const [showModal, setShowModal] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
 
+  // Map to keep track of which leagues the user already has characters in
+  const [leagueCharacters, setLeagueCharacters] = useState<Record<string, Character | null>>({});
+
   // Fetch characters when connected
   useEffect(() => {
     if (isConnected && user?.id) {
       fetchCharacters();
     } else {
       setCharacters([]);
+      setLeagueCharacters({});
     }
   }, [isConnected, user?.id]);
 
@@ -47,7 +51,27 @@ export function CharactersList() {
       if (response.ok) {
         const data = await response.json();
         console.log('Characters fetched:', data.characters);
-        setCharacters(data.characters || []);
+        const fetchedCharacters = data.characters || [];
+        setCharacters(fetchedCharacters);
+        
+        // Group characters by league
+        const charactersByLeague: Record<string, Character | null> = {};
+        
+        // Initialize with null for all available leagues
+        if (user.leagues) {
+          user.leagues.forEach(league => {
+            charactersByLeague[league] = null;
+          });
+        }
+        
+        // Set characters for their respective leagues
+        fetchedCharacters.forEach(character => {
+          if (character.league) {
+            charactersByLeague[character.league] = character;
+          }
+        });
+        
+        setLeagueCharacters(charactersByLeague);
       } else {
         console.error('Failed to fetch characters:', await response.text());
       }
@@ -58,7 +82,8 @@ export function CharactersList() {
     }
   };
 
-  const handleCreateButtonClick = () => {
+  const handleCreateButtonClick = (league: string) => {
+    setSelectedLeague(league);
     setShowModal(true);
   };
 
@@ -67,12 +92,6 @@ export function CharactersList() {
     fetchCharacters();
   };
 
-  // Get available leagues based on user roles
-  const getAvailableLeagues = () => {
-    if (!user?.leagues) return ['general'];
-    return user.leagues;
-  };
-  
   // Format owner IDs to show only 3 digits at each end
   const formatOwnerId = (id: string) => {
     if (!id) return '';
@@ -91,13 +110,6 @@ export function CharactersList() {
     <div className="mt-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">My Characters</h2>
-        
-        <button
-          onClick={handleCreateButtonClick}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md text-sm"
-        >
-          Add Character
-        </button>
       </div>
 
       {isLoading ? (
@@ -109,58 +121,88 @@ export function CharactersList() {
         </div>
       ) : characters.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <p>No characters yet. Create your first character!</p>
+          <p>No characters yet. Create your first character in one of your available leagues!</p>
           
           {/* Display available leagues */}
-          <div className="mt-6">
-            <p className="mb-3 text-gray-400">You have access to these leagues:</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {getAvailableLeagues().map(league => {
+          {user?.leagues && user.leagues.length > 0 ? (
+            <div className="mt-6 grid gap-4">
+              {user.leagues.map(league => {
                 const leagueInfo = getLeagueInfo(league);
                 return (
                   <div 
                     key={league}
-                    className="bg-gray-700 rounded px-3 py-2 inline-flex items-center"
+                    className="bg-gray-700 rounded-lg p-4"
                   >
-                    <span className="mr-2">{leagueInfo.icon}</span>
-                    <span>{leagueInfo.name}</span>
+                    <div className="flex items-center mb-2">
+                      <span className="text-xl mr-2">{leagueInfo.icon}</span>
+                      <span className="font-medium">{leagueInfo.name}</span>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-3">{leagueInfo.description}</p>
+                    <button 
+                      onClick={() => handleCreateButtonClick(league)}
+                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white text-sm"
+                    >
+                      Create Character in {leagueInfo.name}
+                    </button>
                   </div>
                 );
               })}
             </div>
-          </div>
+          ) : (
+            <p className="mt-4 text-red-400">You don't have access to any leagues. Join the Discord server and get the necessary roles.</p>
+          )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {characters.map((character) => (
-            <Link key={character.id} href={`/character/${character.id}`}>
-              <div className="bg-gray-800 rounded-lg p-4 hover:bg-gray-700 transition cursor-pointer">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="flex items-center">
-                      <h3 className="font-medium text-lg">{character.name}</h3>
-                      {character.league && (
-                        <span 
-                          className="ml-2 px-2 py-0.5 text-xs rounded" 
-                          style={{ backgroundColor: getLeagueInfo(character.league || 'general').color + '30' }}
-                        >
-                          {getLeagueInfo(character.league || 'general').icon} {getLeagueInfo(character.league || 'general').name}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-gray-400 truncate max-w-md">{character.traits}</p>
-                    <div className="text-xs text-gray-500 mt-1">ID: {formatOwnerId(character.owner)}</div>
+        <div>
+          <h3 className="text-lg font-medium mb-3">Your League Characters</h3>
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            {user?.leagues && user.leagues.map(league => {
+              const leagueInfo = getLeagueInfo(league);
+              const character = leagueCharacters[league];
+              
+              return (
+                <div 
+                  key={league}
+                  className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700"
+                >
+                  <div className="px-4 py-3 bg-gray-700 flex items-center">
+                    <span className="text-xl mr-2">{leagueInfo.icon}</span>
+                    <h4 className="font-medium">{leagueInfo.name}</h4>
                   </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold">{character.elo} Elo</div>
-                    <div className="text-sm text-gray-400">
-                      {character.wins}W {character.losses}L {character.draws}D
+                  
+                  {character ? (
+                    <Link href={`/character/${character.id}`}>
+                      <div className="p-4 hover:bg-gray-700 transition cursor-pointer">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h3 className="font-medium text-lg">{character.name}</h3>
+                            <p className="text-gray-400 truncate max-w-md">{character.traits}</p>
+                            <div className="text-xs text-gray-500 mt-1">ID: {formatOwnerId(character.owner)}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold">{character.elo} Elo</div>
+                            <div className="text-sm text-gray-400">
+                              {character.wins}W {character.losses}L {character.draws}D
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ) : (
+                    <div className="p-4 flex flex-col items-center justify-center text-center">
+                      <p className="text-gray-400 mb-3">No character in this league yet</p>
+                      <button 
+                        onClick={() => handleCreateButtonClick(league)}
+                        className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white text-sm"
+                      >
+                        Create Character
+                      </button>
                     </div>
-                  </div>
+                  )}
                 </div>
-              </div>
-            </Link>
-          ))}
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -168,6 +210,7 @@ export function CharactersList() {
         <CreateCharacterModal
           onClose={() => setShowModal(false)}
           onSuccess={handleCreateSuccess}
+          initialLeague={selectedLeague}
         />
       )}
     </div>

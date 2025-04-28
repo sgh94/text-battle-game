@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { BattleHistory } from './BattleHistory';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -31,12 +31,67 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   const [cooldown, setCooldown] = useState<number | null>(null);
   const [cooldownTimer, setCooldownTimer] = useState<NodeJS.Timeout | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditingTraits, setIsEditingTraits] = useState(false);
+  const [newTraits, setNewTraits] = useState('');
+  const [traitUpdateCooldown, setTraitUpdateCooldown] = useState<number | null>(null);
+  const [traitUpdateTimer, setTraitUpdateTimer] = useState<NodeJS.Timeout | null>(null);
+  const [showTraitWarning, setShowTraitWarning] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
+
+  // Add a function to format the cooldown time
+  const formatCooldownTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours}h ${minutes}m ${secs}s`;
+  };
+
+  // Add a function to start the trait update cooldown timer
+  const startTraitUpdateTimer = (seconds: number) => {
+    if (traitUpdateTimer) clearInterval(traitUpdateTimer);
+
+    setTraitUpdateCooldown(seconds);
+
+    const timer = setInterval(() => {
+      setTraitUpdateCooldown((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(timer);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    setTraitUpdateTimer(timer);
+  };
+
+  // Add a function to check trait update cooldown
+  const checkTraitUpdateCooldown = async () => {
+    try {
+      const response = await fetch(`/api/character/${id}/update-traits`);
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data.remainingSeconds > 0) {
+          setTraitUpdateCooldown(data.remainingSeconds);
+          startTraitUpdateTimer(data.remainingSeconds);
+        } else {
+          setTraitUpdateCooldown(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking trait update cooldown:', error);
+    }
+  };
 
   useEffect(() => {
     fetchCharacter();
+    checkTraitUpdateCooldown();
     return () => {
       if (cooldownTimer) clearInterval(cooldownTimer);
+      if (traitUpdateTimer) clearInterval(traitUpdateTimer);
     };
   }, [id]);
 
@@ -195,6 +250,67 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
     }
   };
 
+  // Add this to handle editing mode
+  const startEditingTraits = () => {
+    if (character) {
+      setNewTraits(character.traits);
+      setIsEditingTraits(true);
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, 0);
+    }
+  };
+
+  // Add function to handle traits update
+  const updateTraits = async () => {
+    if (!user?.id || !character) return;
+
+    try {
+      // First close the warning modal
+      setShowTraitWarning(false);
+      
+      const response = await fetch(`/api/character/${id}/update-traits`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.id}:${Date.now()}:discord_auth_${user.id}`
+        },
+        body: JSON.stringify({ 
+          traits: newTraits 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 429 && data.remainingSeconds) {
+          startTraitUpdateTimer(data.remainingSeconds);
+        }
+        throw new Error(data.error || 'Failed to update traits');
+      }
+
+      // Update character with new traits and ELO
+      setCharacter(data.character);
+      setIsEditingTraits(false);
+      
+      // Start cooldown
+      startTraitUpdateTimer(6 * 60 * 60); // 6 hours
+      
+      // Show confirmation with ELO reduction
+      alert(`Traits updated! Your ELO has been reduced from ${data.previousElo} to ${data.newElo} (${data.eloReduction} points penalty).`);
+    } catch (error: any) {
+      console.error('Trait update error:', error);
+      alert(error.message || 'Failed to update traits');
+    }
+  };
+
+  // Add this to handle the warning confirmation
+  const confirmTraitUpdate = () => {
+    setShowTraitWarning(true);
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center my-8">
@@ -239,7 +355,53 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
 
         <div className="mb-6">
           <h3 className="text-gray-400 mb-2">Traits</h3>
-          <p className="whitespace-pre-line">{character.traits}</p>
+          
+          {isEditingTraits ? (
+            <div>
+              <textarea
+                ref={textareaRef}
+                value={newTraits}
+                onChange={(e) => setNewTraits(e.target.value)}
+                className="w-full h-40 p-2 bg-gray-700 text-white rounded-md mb-2"
+                placeholder="Enter character traits..."
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsEditingTraits(false)}
+                  className="py-2 px-4 rounded-md bg-gray-600 hover:bg-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmTraitUpdate}
+                  className="py-2 px-4 rounded-md bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Update Traits
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="whitespace-pre-line mb-4">{character.traits}</p>
+              {isOwner && (
+                <button
+                  onClick={startEditingTraits}
+                  disabled={traitUpdateCooldown !== null}
+                  className={`py-2 px-4 rounded-md text-sm ${
+                    traitUpdateCooldown !== null
+                      ? 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}
+                >
+                  {traitUpdateCooldown !== null ? (
+                    `Cooldown: ${formatCooldownTime(traitUpdateCooldown)}`
+                  ) : (
+                    'Edit Traits'
+                  )}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {isOwner && (
@@ -300,6 +462,35 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
           </div>
         )}
       </div>
+
+      {showTraitWarning && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full">
+            <h3 className="text-xl font-bold mb-4 text-red-400">Warning: ELO Penalty</h3>
+            <p className="mb-4">
+              Updating your character's traits will result in a <span className="font-bold text-red-400">25% ELO reduction</span>.
+              Your current ELO is {character.elo}, which means you will lose {Math.round(character.elo * 0.25)} points.
+            </p>
+            <p className="mb-6">
+              Additionally, you won't be able to update traits again for <span className="font-bold">6 hours</span>.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowTraitWarning(false)}
+                className="py-2 px-4 rounded-md bg-gray-600 hover:bg-gray-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={updateTraits}
+                className="py-2 px-4 rounded-md bg-red-600 hover:bg-red-700"
+              >
+                Confirm Update
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <BattleHistory characterId={id} />
     </div>

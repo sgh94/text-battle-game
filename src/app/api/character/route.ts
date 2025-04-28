@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const name = requestData?.name as string;
     const traits = requestData?.traits as string;
     const userId = requestData?.userId; // This is Discord user ID
-    const league = requestData?.league || 'bronze'; // Default league if not specified
+    const league = requestData?.league || 'general'; // Default league if not specified
     
     // Basic validation
     if (!name || !traits) {
@@ -57,12 +57,27 @@ export async function POST(request: NextRequest) {
       console.warn('KV database error on fetching character IDs', kvError);
     }
 
-    // Check if user already has 5 characters
-    if (characterIds.length >= 5) {
-      return NextResponse.json(
-        { error: 'Maximum number of characters (5) reached' },
-        { status: 400 }
+    // Check if the user already has a character in this league
+    if (characterIds.length > 0) {
+      // Get all characters to check their leagues
+      const characters = await Promise.all(
+        characterIds.map(async (id) => {
+          return await kv.hgetall<Character>(`character:${id}`);
+        })
       );
+      
+      // Filter out null values
+      const userCharacters = characters.filter((char): char is Character => char !== null);
+      
+      // Check if user already has a character in this league
+      const existingCharacterInLeague = userCharacters.find(char => char.league === league);
+      
+      if (existingCharacterInLeague) {
+        return NextResponse.json(
+          { error: `You already have a character in the ${league} league. Only one character per league is allowed.` },
+          { status: 400 }
+        );
+      }
     }
 
     // Create unique character ID

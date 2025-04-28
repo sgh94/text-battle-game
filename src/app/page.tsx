@@ -1,6 +1,6 @@
 'use client';
 
-import { ConnectButton } from '@/components/ConnectButton';
+import { DiscordLoginButton } from '@/components/DiscordLoginButton';
 import { CharactersList } from '@/components/CharactersList';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -19,7 +19,7 @@ export default function Home() {
 
       <div className="w-full max-w-2xl mb-6">
         <div className="flex justify-between items-center">
-          {isClient && <ConnectButton />}
+          {isClient && <DiscordLoginButton />}
           <Link href="/rankings" className="text-blue-400 hover:text-blue-300 hover:underline font-medium">
             total rankings &rarr;
           </Link>

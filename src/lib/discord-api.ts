@@ -12,7 +12,7 @@ const DISCORD_API_URL = 'https://discord.com/api/v10';
 // Use a fallback client ID in case the environment variable is not set
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1088729716317495367';
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || `${process.env.VERCEL_URL || 'http://localhost:3000'}/auth/callback`;
+const REDIRECT_URI = process.env.isLocal ? 'http://localhost:3000/auth/callback' : 'https://character-battle-game.vercel.app/auth/callback';
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
 // Discord API 오류 타입
@@ -244,7 +244,7 @@ export function getDiscordAuthUrl(): string {
   }
 
   console.log('Using Discord Client ID:', CLIENT_ID);
-  
+
   const scope = 'identify guilds guilds.members.read';
   return `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scope)}`;
 }

@@ -4,10 +4,10 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 
-// 인증 상태 타입
+// Auth status type
 type AuthStatus = 'processing' | 'connecting' | 'success' | 'error';
 
-// 사용자 정보 타입
+// User info type
 interface DiscordUser {
   id: string;
   username: string;
@@ -32,7 +32,7 @@ function DiscordCallbackInner() {
         const code = searchParams.get('code');
         const error = searchParams.get('error');
 
-        // 사용자가 인증을 취소한 경우
+        // If the user canceled authentication
         if (error) {
           if (error === 'access_denied') {
             throw new Error('Discord authentication was canceled.');
@@ -47,7 +47,7 @@ function DiscordCallbackInner() {
 
         setStatus('connecting');
 
-        // Discord API에 인증 코드 전송
+        // Send the auth code to the Discord API
         const response = await fetch('/api/discord/auth', {
           method: 'POST',
           headers: {
@@ -56,23 +56,23 @@ function DiscordCallbackInner() {
           body: JSON.stringify({ code }),
         });
 
-        // 응답 처리
+        // Handle response
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error', code: 'UNKNOWN_ERROR' }));
           throw new Error(errorData.error || `Failed to authenticate with Discord (${response.status})`);
         }
 
-        // 사용자 데이터 추출 및 저장
+        // Extract and save user data
         const userData: DiscordUser = await response.json();
         setUser(userData);
 
-        // 로컬 스토리지에 사용자 데이터 저장
+        // Save user data to local storage
         localStorage.setItem('text-battle-discord-auth', JSON.stringify(userData));
 
-        // 성공 상태로 설정
+        // Set success status
         setStatus('success');
 
-        // 잠시 후 홈페이지로 리다이렉트
+        // Redirect to home page after a short delay
         setTimeout(() => {
           router.push('/');
         }, 2000);
@@ -81,14 +81,14 @@ function DiscordCallbackInner() {
         console.error('Error handling Discord callback:', error);
         setStatus('error');
 
-        // 사용자 친화적인 오류 메시지 설정
+        // Set user-friendly error message
         if (error instanceof Error) {
           setErrorMessage(error.message);
         } else {
           setErrorMessage('An unknown error occurred during Discord authentication.');
         }
 
-        // 에러 코드 설정 (있는 경우)
+        // Set error code (if available)
         setErrorCode((error as any)?.code || 'UNKNOWN_ERROR');
       }
     };
@@ -96,13 +96,13 @@ function DiscordCallbackInner() {
     handleCallback();
   }, [searchParams, router]);
 
-  // Discord 사용자 아바타 URL 생성
+  // Generate Discord user avatar URL
   const getAvatarUrl = () => {
     if (!user || !user.avatar) return null;
     return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`;
   };
 
-  // 리그 이모지 매핑
+  // League emoji mapping
   const leagueEmoji = {
     bronze: '🥉',
     silver: '🥈',
@@ -120,10 +120,10 @@ function DiscordCallbackInner() {
         </div>
 
         <h1 className="text-2xl font-bold mb-6 text-center">
-          {status === 'processing' && 'Discord 인증 처리 중...'}
-          {status === 'connecting' && 'Discord 연결 중...'}
-          {status === 'success' && 'Discord 연결 성공!'}
-          {status === 'error' && '연결 실패'}
+          {status === 'processing' && 'Processing Discord authentication...'}
+          {status === 'connecting' && 'Connecting to Discord...'}
+          {status === 'success' && 'Discord connection successful!'}
+          {status === 'error' && 'Connection failed'}
         </h1>
 
         <div className="flex justify-center mb-6">
@@ -134,7 +134,7 @@ function DiscordCallbackInner() {
           {status === 'connecting' && (
             <div className="flex flex-col items-center">
               <div className="animate-pulse h-10 w-10 border-4 border-indigo-500 rounded-full border-t-transparent animate-spin mb-4"></div>
-              <p className="text-gray-600">Discord 서버에서 역할 정보를 가져오는 중...</p>
+              <p className="text-gray-600">Fetching role information from Discord server...</p>
             </div>
           )}
 
@@ -170,13 +170,13 @@ function DiscordCallbackInner() {
 
                 <div className="bg-indigo-100 px-4 py-2 rounded-full mb-4">
                   <span className="font-medium">
-                    {user.primaryLeague.charAt(0).toUpperCase() + user.primaryLeague.slice(1)} 리그
+                    {user.primaryLeague.charAt(0).toUpperCase() + user.primaryLeague.slice(1)} League
                     {' '}
                     {leagueEmoji[user.primaryLeague as keyof typeof leagueEmoji] || '🏆'}
                   </span>
                 </div>
 
-                <p className="text-sm">인증이 완료되었습니다! 홈 페이지로 이동합니다...</p>
+                <p className="text-sm">Authentication complete! Redirecting to home page...</p>
               </div>
             </div>
           )}
@@ -191,11 +191,11 @@ function DiscordCallbackInner() {
                 </div>
               </div>
 
-              <p className="text-lg font-medium mb-2">인증 오류</p>
-              <p className="mb-4">{errorMessage || '알 수 없는 오류가 발생했습니다.'}</p>
+              <p className="text-lg font-medium mb-2">Authentication Error</p>
+              <p className="mb-4">{errorMessage || 'An unknown error occurred.'}</p>
 
               {errorCode && (
-                <p className="text-xs text-red-500 mb-4">오류 코드: {errorCode}</p>
+                <p className="text-xs text-red-500 mb-4">Error code: {errorCode}</p>
               )}
 
               <div className="flex justify-center">
@@ -203,7 +203,7 @@ function DiscordCallbackInner() {
                   onClick={() => router.push('/')}
                   className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors"
                 >
-                  홈으로 돌아가기
+                  Go back to Home
                 </button>
               </div>
             </div>

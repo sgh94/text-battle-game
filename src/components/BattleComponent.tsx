@@ -113,9 +113,9 @@ export function BattleComponent() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           characterId: selectedCharacter,
-          userId: user.id 
+          userId: user.id
         }),
       });
 

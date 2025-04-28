@@ -1,15 +1,15 @@
-// Discord 역할 및 리그 관리 로직
+// Discord role and league management logic
 
-// 역할 ID와 리그 매핑
+// Role ID to league mapping
 export const ROLE_TO_LEAGUE_MAP: Record<string, string> = {
-  // 실제 디스코드 서버의 역할 ID와 해당 리그를 매핑
+  // Mapping of actual Discord server role IDs to their corresponding leagues
   '1366310085462200362': 'general',        // General League
   '1366310139425980436': 'veteran',        // Veteran Mitosis Explorers
   '1366310183281885234': 'community',      // Community Guardians
   '1366310235605696512': 'morse'           // Morse Trainer
 };
 
-// 리그 정보 
+// League information
 export const LEAGUES = {
   general: {
     id: 'general',
@@ -57,51 +57,51 @@ export const ROLE_REQUIREMENTS = {
   'morse': ['1366310235605696512']
 };
 
-// 사용자의 역할에 따라 접근 가능한 리그 목록 결정
+// Determine accessible leagues based on user roles
 export function determineUserLeagues(roles: string[]): string[] {
   if (!roles || !Array.isArray(roles) || roles.length === 0) {
-    return []; // 기본 리그 없음 - 모든 리그는 특정 역할이 필요함
+    return []; // No default league - all leagues require specific roles
   }
-  
+
   const leagues = new Set<string>();
-  
-  // 각 리그별로 필요한 역할을 가지고 있는지 확인
+
+  // Check if the user has the required roles for each league
   Object.entries(ROLE_REQUIREMENTS).forEach(([leagueId, requiredRoles]) => {
-    // 필요한 역할 중 하나라도 가지고 있으면 해당 리그에 접근 가능
+    // User can access the league if they have at least one of the required roles
     const hasRequiredRole = requiredRoles.some(roleId => roles.includes(roleId));
     if (hasRequiredRole) {
       leagues.add(leagueId);
     }
   });
-  
+
   return Array.from(leagues);
 }
 
-// 사용자의 주요 리그 결정 (기본값)
+// Determine the user's primary league (default)
 export function getPrimaryLeague(leagues: string[]): string | null {
-  // 사용자가 접근 가능한 리그가 없는 경우
+  // If the user has no accessible leagues
   if (!leagues || leagues.length === 0) {
     return null;
   }
-  
-  // 사용자가 접근 가능한 리그가 하나만 있는 경우, 그것이 주 리그
+
+  // If the user has access to only one league, that's their primary league
   if (leagues.length === 1) {
     return leagues[0];
   }
-  
-  // 여러 리그에 접근 가능한 경우, 우선순위 높은 순서대로 반환
+
+  // If the user has access to multiple leagues, return based on priority order
   const leaguePriority = ['morse', 'community', 'veteran', 'general'];
   for (const league of leaguePriority) {
     if (leagues.includes(league)) {
       return league;
     }
   }
-  
-  // 매치되는 것이 없으면 첫 번째 리그 반환
+
+  // If no match is found, return the first league
   return leagues[0];
 }
 
-// 리그 정보 조회
+// Get league information
 export function getLeagueInfo(leagueId: string) {
   return LEAGUES[leagueId as keyof typeof LEAGUES] || {
     id: leagueId,
@@ -114,55 +114,55 @@ export function getLeagueInfo(leagueId: string) {
   };
 }
 
-// 해당 리그 접근 권한이 있는지 확인
+// Check if the user has access to a specific league
 export function hasLeagueAccess(userRoles: string[], leagueId: string): boolean {
   if (!ROLE_REQUIREMENTS[leagueId as keyof typeof ROLE_REQUIREMENTS]) {
     return false;
   }
-  
+
   const requiredRoles = ROLE_REQUIREMENTS[leagueId as keyof typeof ROLE_REQUIREMENTS];
   return requiredRoles.some(roleId => userRoles.includes(roleId));
 }
 
-// 역할 ID로부터 역할 이름 조회 (개발용 헬퍼 함수)
+// Get role name from role ID (helper function for development)
 export function getRoleNameFromId(roleId: string): string {
   const leagueId = ROLE_TO_LEAGUE_MAP[roleId];
   if (leagueId) {
     const league = LEAGUES[leagueId as keyof typeof LEAGUES];
-    return league ? `${league.name} 역할` : '알 수 없는 역할';
+    return league ? `${league.name} role` : 'Unknown role';
   }
-  
-  return '일반 역할';
+
+  return 'General role';
 }
 
-// 사용자 역할 설명 생성 (사용자 경험 개선용)
+// Generate user role description (for improved user experience)
 export function generateRoleDescription(roles: string[]): string {
   if (!roles || roles.length === 0) {
-    return '역할 없음 (리그 접근 권한이 없습니다)';
+    return 'No roles (no league access permissions)';
   }
-  
+
   const leagues = determineUserLeagues(roles);
   if (leagues.length === 0) {
-    return '접근 가능한 리그가 없습니다';
+    return 'No accessible leagues';
   }
-  
+
   const primaryLeague = getPrimaryLeague(leagues);
   if (!primaryLeague) {
-    return '접근 가능한 리그가 없습니다';
+    return 'No accessible leagues';
   }
-  
+
   const primaryLeagueInfo = getLeagueInfo(primaryLeague);
-  
-  let description = `주 선택 리그: ${primaryLeagueInfo.name} (${primaryLeagueInfo.icon})`;
-  
+
+  let description = `Primary league: ${primaryLeagueInfo.name} (${primaryLeagueInfo.icon})`;
+
   if (leagues.length > 1) {
     const otherLeagues = leagues
       .filter(league => league !== primaryLeague)
       .map(league => getLeagueInfo(league).name)
       .join(', ');
-    
-    description += `\n접근 가능한 추가 리그: ${otherLeagues}`;
+
+    description += `\nAdditional accessible leagues: ${otherLeagues}`;
   }
-  
+
   return description;
 }

@@ -36,10 +36,19 @@ export function CreateCharacterModal({
       setIsSubmitting(true);
       setError('');
 
+      // Get auth token from local storage
+      const authData = localStorage.getItem('text-battle-discord-auth');
+      if (!authData) {
+        throw new Error('You are not authenticated. Please log in again.');
+      }
+
+      // Create Authorization header with the user ID as the token
+      // This is a simple approach - in a production environment, you would use a proper token
       const response = await fetch('/api/character', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.id}:${Date.now()}:discord_auth_${user.id}`,
         },
         body: JSON.stringify({ 
           name, 

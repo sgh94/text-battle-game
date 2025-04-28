@@ -16,17 +16,25 @@ export async function POST(request: NextRequest) {
     const requestData = await request.json();
     const name = requestData?.name as string;
     const traits = requestData?.traits as string;
-
+    const userId = requestData?.userId; // This is Discord user ID
+    
     // Basic validation
     if (!name || !traits) {
       return NextResponse.json({ error: 'Name and traits are required' }, { status: 400 });
+    }
+
+    // Determine which ID to use (Discord user ID preferred over address from auth)
+    const characterOwner = userId || userAddress;
+    
+    if (!characterOwner) {
+      return NextResponse.json({ error: 'User identification failed' }, { status: 400 });
     }
 
     // Get user's existing characters
     let characterIds: string[] = [];
 
     try {
-      const characterIdsResponse = await kv.smembers(`user:${userAddress}:characters`);
+      const characterIdsResponse = await kv.smembers(`user:${characterOwner}:characters`);
       // Ensure characterIds is an array
       characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
     } catch (kvError) {
@@ -42,14 +50,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Create unique character ID
-    const characterId = `${userAddress}_${Date.now()}`;
+    const characterId = `${characterOwner}_${Date.now()}`;
 
     // Set initial ELO score
     const defaultElo = 1000;
 
     const character: Character = {
       id: characterId,
-      owner: userAddress!,
+      owner: characterOwner,
       name,
       traits,
       elo: defaultElo,
@@ -63,7 +71,7 @@ export async function POST(request: NextRequest) {
       // Save character data to KV
       await kv.hset(`character:${characterId}`, character as Record<string, unknown>);
       // Add character to user's character list
-      await kv.sadd(`user:${userAddress}:characters`, characterId);
+      await kv.sadd(`user:${characterOwner}:characters`, characterId);
       // Add character to the global ranking set with ELO as score
       await kv.zadd('characters:ranking', { score: defaultElo, member: characterId });
     } catch (kvError) {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 import Link from 'next/link';
 import { CreateCharacterModal } from './CreateCharacterModal';
+import { getLeagueInfo } from '@/lib/discord-roles';
 
 interface Character {
   id: string;
@@ -13,6 +14,7 @@ interface Character {
   wins: number;
   losses: number;
   draws: number;
+  league: string;
 }
 
 export function CharactersList() {
@@ -20,6 +22,7 @@ export function CharactersList() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
 
   // Fetch characters when connected
   useEffect(() => {
@@ -35,11 +38,17 @@ export function CharactersList() {
     
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/character?userId=${user.id}`);
+      console.log(`Fetching characters for user ID: ${user.id}`);
+      
+      // Use address parameter with the user ID
+      const response = await fetch(`/api/character?address=${user.id}`);
       
       if (response.ok) {
         const data = await response.json();
+        console.log('Characters fetched:', data.characters);
         setCharacters(data.characters || []);
+      } else {
+        console.error('Failed to fetch characters:', await response.text());
       }
     } catch (error) {
       console.error('Error fetching characters:', error);
@@ -57,6 +66,12 @@ export function CharactersList() {
     fetchCharacters();
   };
 
+  // Get available leagues based on user roles
+  const getAvailableLeagues = () => {
+    if (!user?.leagues) return ['general'];
+    return user.leagues;
+  };
+
   if (!isConnected) {
     return (
       <div className="mt-8 text-center">
@@ -69,14 +84,13 @@ export function CharactersList() {
     <div className="mt-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">My Characters</h2>
-        {characters.length < 1 && ( // 계정당 하나의 캐릭터 제한
-          <button
-            onClick={handleCreateButtonClick}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md text-sm"
-          >
-            Add Character
-          </button>
-        )}
+        
+        <button
+          onClick={handleCreateButtonClick}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md text-sm"
+        >
+          Add Character
+        </button>
       </div>
 
       {isLoading ? (
@@ -89,6 +103,25 @@ export function CharactersList() {
       ) : characters.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p>No characters yet. Create your first character!</p>
+          
+          {/* Display available leagues */}
+          <div className="mt-6">
+            <p className="mb-3 text-gray-400">You have access to these leagues:</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {getAvailableLeagues().map(league => {
+                const leagueInfo = getLeagueInfo(league);
+                return (
+                  <div 
+                    key={league}
+                    className="bg-gray-700 rounded px-3 py-2 inline-flex items-center"
+                  >
+                    <span className="mr-2">{leagueInfo.icon}</span>
+                    <span>{leagueInfo.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -97,7 +130,17 @@ export function CharactersList() {
               <div className="bg-gray-800 rounded-lg p-4 hover:bg-gray-700 transition cursor-pointer">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="font-medium text-lg">{character.name}</h3>
+                    <div className="flex items-center">
+                      <h3 className="font-medium text-lg">{character.name}</h3>
+                      {character.league && (
+                        <span 
+                          className="ml-2 px-2 py-0.5 text-xs rounded" 
+                          style={{ backgroundColor: getLeagueInfo(character.league || 'general').color + '30' }}
+                        >
+                          {getLeagueInfo(character.league || 'general').icon} {getLeagueInfo(character.league || 'general').name}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-gray-400 truncate max-w-md">{character.traits}</p>
                   </div>
                   <div className="text-right">

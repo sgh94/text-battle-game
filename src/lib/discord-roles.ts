@@ -2,99 +2,95 @@
 
 // 역할 ID와 리그 매핑
 export const ROLE_TO_LEAGUE_MAP: Record<string, string> = {
-  // 여기에 실제 디스코드 서버의 역할 ID와 해당 리그를 매핑합니다
-  // 예시 역할 ID - 실제 구현 시 업데이트 필요
-  '123456789123456789': 'bronze',
-  '234567890234567890': 'silver',
-  '345678901345678901': 'gold',
-  '456789012456789012': 'platinum',
-};
-
-// 특별 역할 - 여러 리그에 접근 권한을 부여하는 역할
-export const SPECIAL_ROLES: Record<string, string[]> = {
-  '567890123567890123': ['gold', 'platinum'],
-  '678901234678901234': ['silver', 'gold'],
+  // 실제 디스코드 서버의 역할 ID와 해당 리그를 매핑
+  '1366310085462200362': 'general',        // General League
+  '1366310139425980436': 'veteran',        // Veteran Mitosis Explorers
+  '1366310183281885234': 'community',      // Community Guardians
+  '1366310235605696512': 'morse'           // Morse Trainer
 };
 
 // 리그 정보 
 export const LEAGUES = {
-  bronze: {
-    id: 'bronze',
-    name: '브론즈 리그',
-    color: '#cd7f32',
-    icon: '🥉',
-    description: '모든 플레이어를 위한 시작 리그',
+  general: {
+    id: 'general',
+    name: 'General League',
+    color: '#6a7ec7',
+    icon: '1️⃣',
+    description: 'For every Mitosian brave enough to enter the arena.',
+    eligibility: 'Have the Mitosian role in Mitosis Discord',
     order: 1
   },
-  silver: {
-    id: 'silver',
-    name: '실버 리그',
-    color: '#c0c0c0',
-    icon: '🥈',
-    description: '일정 수준의 실력을 갖춘 플레이어를 위한 리그',
+  veteran: {
+    id: 'veteran',
+    name: 'Veteran Mitosis Explorers',
+    color: '#c7c7c7',
+    icon: '2️⃣',
+    description: 'You\'ve touched the Vaults. You\'ve earned your place.',
+    eligibility: 'Have the Expedition Explorer role in Mitosis Discord',
     order: 2
   },
-  gold: {
-    id: 'gold',
-    name: '골드 리그',
-    color: '#ffd700',
-    icon: '🥇',
-    description: '숙련된 플레이어를 위한 리그',
+  community: {
+    id: 'community',
+    name: 'Community Guardians',
+    color: '#e5c07b',
+    icon: '3️⃣',
+    description: 'The ones who built the culture together.',
+    eligibility: 'Have at least one of the community roles in Mitosis Discord',
     order: 3
   },
-  platinum: {
-    id: 'platinum',
-    name: '플래티넘 리그',
-    color: '#e5e4e2',
-    icon: '💎',
-    description: '최상위 플레이어를 위한 엘리트 리그',
+  morse: {
+    id: 'morse',
+    name: 'Morse Trainer',
+    color: '#e06c75',
+    icon: '4️⃣',
+    description: 'You train Morse well. But can you train your hero for battle?',
+    eligibility: 'Have the Morse Trainer role in Mitosis Discord',
     order: 4
-  },
+  }
 };
 
 // 사용자의 역할에 따라 접근 가능한 리그 목록 결정
 export function determineUserLeagues(roles: string[]): string[] {
   if (!roles || !Array.isArray(roles) || roles.length === 0) {
-    return ['bronze']; // 기본 리그
+    return ['general']; // 기본 리그는 General League
   }
   
   const leagues = new Set<string>();
   
-  // 브론즈 리그는 기본적으로 모든 사용자에게 부여
-  leagues.add('bronze');
+  // General League는 기본적으로 모든 사용자에게 부여
+  leagues.add('general');
   
   // 역할 기반 리그 할당
   roles.forEach(roleId => {
-    const league = ROLE_TO_LEAGUE_MAP[roleId];
-    if (league) {
-      leagues.add(league);
+    if (roleId === '1366310139425980436') { // Veteran Mitosis Explorers
+      leagues.add('veteran');
     }
-    
-    // 특별 역할 처리
-    const specialLeagues = SPECIAL_ROLES[roleId];
-    if (specialLeagues) {
-      specialLeagues.forEach(league => leagues.add(league));
+    if (roleId === '1366310183281885234') { // Community Guardians
+      leagues.add('community');
+    }
+    if (roleId === '1366310235605696512') { // Morse Trainer
+      leagues.add('morse');
     }
   });
   
   return Array.from(leagues);
 }
 
-// 사용자의 주요 리그 결정 (가장 최근에 선택한 리그 또는 기본값)
+// 사용자의 주요 리그 결정 (기본값)
 export function getPrimaryLeague(leagues: string[]): string {
   // 사용자가 접근 가능한 리그가 하나만 있는 경우, 그것이 주 리그
   if (leagues.length === 1) {
     return leagues[0];
   }
   
-  // 사용자가 접근 가능한 리그가 여러 개인 경우, 첫 번째 비브론즈 리그를 반환
+  // 사용자가 접근 가능한 리그가 여러 개인 경우, 가장 첫 번째 비 general 리그를 반환
   for (const league of leagues) {
-    if (league !== 'bronze') {
+    if (league !== 'general') {
       return league;
     }
   }
   
-  return 'bronze'; // 기본 리그
+  return 'general'; // 기본 리그
 }
 
 // 리그 정보 조회
@@ -105,6 +101,7 @@ export function getLeagueInfo(leagueId: string) {
     color: '#888888',
     icon: '🏆',
     description: 'A league for battlers',
+    eligibility: 'Open to all',
     order: 0
   };
 }
@@ -114,32 +111,10 @@ export function hasLeagueAccess(leagues: string[], leagueId: string): boolean {
   return leagues.includes(leagueId);
 }
 
-// 역할 ID로부터 역할 이름 조회 (개발용 헬퍼 함수)
-export function getRoleNameFromId(roleId: string): string {
-  const leagueId = ROLE_TO_LEAGUE_MAP[roleId];
-  if (leagueId) {
-    const league = LEAGUES[leagueId as keyof typeof LEAGUES];
-    return league ? `${league.name} 역할` : '알 수 없는 역할';
-  }
-  
-  // 특별 역할 처리
-  const specialLeagues = SPECIAL_ROLES[roleId];
-  if (specialLeagues && specialLeagues.length > 0) {
-    const leagueNames = specialLeagues.map(leagueId => {
-      const league = LEAGUES[leagueId as keyof typeof LEAGUES];
-      return league ? league.name : leagueId;
-    }).join(', ');
-    
-    return `특별 역할 (${leagueNames})`;
-  }
-  
-  return '일반 역할';
-}
-
 // 사용자 역할 설명 생성 (사용자 경험 개선용)
 export function generateRoleDescription(roles: string[]): string {
   if (!roles || roles.length === 0) {
-    return '역할 없음 (기본 브론즈 리그에 속합니다)';
+    return '역할 없음 (기본 General League에 속합니다)';
   }
   
   const leagues = determineUserLeagues(roles);

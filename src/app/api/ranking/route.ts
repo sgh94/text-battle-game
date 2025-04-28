@@ -8,14 +8,26 @@ export async function GET(request: NextRequest) {
   try {
     const limit = parseInt(request.nextUrl.searchParams.get('limit') || '10');
     const offset = parseInt(request.nextUrl.searchParams.get('offset') || '0');
+    const league = request.nextUrl.searchParams.get('league') || 'bronze';
 
-    // Get top characters by ELO
+    // Get top characters by ELO for the specified league
+    const rankingKey = `league:${league}:ranking`;
+    
+    // Check if league-specific ranking exists, otherwise create it
+    const exists = await kv.exists(rankingKey);
+    if (!exists) {
+      console.log(`Creating new ranking for league: ${league}`);
+      // This is a new league ranking - we'll just return empty results now
+      // and populate it when characters in this league are created
+      return NextResponse.json({ rankings: [] });
+    }
+
     const rankingResultsResponse = await kv.zrange(
-      'characters:ranking',
+      rankingKey,
       0,
       -1,
       {
-        rev: true, // Descending order
+        rev: true, // Descending order (highest scores first)
         withScores: true,
       }
     );
@@ -57,7 +69,13 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json({ rankings: rankings.filter((ranking): ranking is Character & { rank: number, elo: number } => ranking !== null) });
+    // Filter out null values and ensure characters are in the correct league
+    const filteredRankings = rankings
+      .filter((ranking): ranking is Character & { rank: number, elo: number } => 
+        ranking !== null && (!ranking.league || ranking.league === league)
+      );
+
+    return NextResponse.json({ rankings: filteredRankings });
   } catch (error) {
     console.error('Error fetching rankings:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

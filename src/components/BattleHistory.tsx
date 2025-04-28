@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 interface Battle {
   id: string;
@@ -13,14 +14,19 @@ interface Battle {
   timestamp: number;
 }
 
+interface Character {
+  id: string;
+  name: string;
+}
+
 interface BattleHistoryProps {
   characterId: string;
 }
 
 export function BattleHistory({ characterId }: BattleHistoryProps) {
   const [battles, setBattles] = useState<Battle[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [characters, setCharacters] = useState<Record<string, any>>({});
+  const [characters, setCharacters] = useState<Record<string, Character>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchBattleHistory();
@@ -29,21 +35,15 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
   const fetchBattleHistory = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/battle?characterId=${characterId}&limit=10`);
+      // Use encodeURIComponent to handle special characters in the ID
+      const response = await fetch(`/api/battle?characterId=${encodeURIComponent(characterId)}`);
       
       if (response.ok) {
         const data = await response.json();
         setBattles(data.battles || []);
         
-        // Get unique character IDs from battles
-        const characterIds = new Set<string>();
-        data.battles.forEach((battle: Battle) => {
-          characterIds.add(battle.character1);
-          characterIds.add(battle.character2);
-        });
-        
-        // Fetch character details for all characters in battles
-        await fetchCharacterDetails(Array.from(characterIds));
+        // Fetch character data for all battles
+        await fetchCharactersInfo(data.battles);
       }
     } catch (error) {
       console.error('Error fetching battle history:', error);
@@ -52,25 +52,40 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
     }
   };
 
-  const fetchCharacterDetails = async (ids: string[]) => {
-    try {
-      const characterDetailsMap: Record<string, any> = {};
-      
-      await Promise.all(
-        ids.map(async (id) => {
-          const response = await fetch(`/api/character/${id}`);
-          
+  const fetchCharactersInfo = async (battles: Battle[]) => {
+    const characterIds = new Set<string>();
+    
+    // Collect all unique character IDs from battles
+    battles.forEach(battle => {
+      characterIds.add(battle.character1);
+      characterIds.add(battle.character2);
+    });
+    
+    // Create a map of character IDs to character data
+    const charactersMap: Record<string, Character> = {};
+    
+    // Fetch character data for each unique ID
+    await Promise.all(
+      Array.from(characterIds).map(async (id) => {
+        try {
+          // Use encodeURIComponent to handle special characters in the ID
+          const response = await fetch(`/api/character/${encodeURIComponent(id)}`);
           if (response.ok) {
             const data = await response.json();
-            characterDetailsMap[id] = data.character;
+            if (data.character) {
+              charactersMap[id] = {
+                id: data.character.id,
+                name: data.character.name
+              };
+            }
           }
-        })
-      );
-      
-      setCharacters(characterDetailsMap);
-    } catch (error) {
-      console.error('Error fetching character details:', error);
-    }
+        } catch (error) {
+          console.error(`Error fetching character ${id}:`, error);
+        }
+      })
+    );
+    
+    setCharacters(charactersMap);
   };
 
   const formatDate = (timestamp: number) => {
@@ -80,69 +95,99 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
 
   if (isLoading) {
     return (
-      <div className="mt-8">
-        <h3 className="text-xl font-bold mb-4">Battle History</h3>
-        <div className="flex justify-center my-4">
-          <svg className="animate-spin h-6 w-6 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
+      <div className="flex justify-center my-4">
+        <svg className="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      </div>
+    );
+  }
+
+  if (battles.length === 0) {
+    return (
+      <div>
+        <h2 className="text-xl font-bold mb-4">Battle History</h2>
+        <div className="bg-gray-800 rounded-lg p-6 text-center">
+          <p className="text-gray-400">No battles yet</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mt-8">
-      <h3 className="text-xl font-bold mb-4">Battle History</h3>
+    <div>
+      <h2 className="text-xl font-bold mb-4">Battle History</h2>
       
-      {battles.length === 0 ? (
-        <div className="bg-gray-800 p-4 rounded-lg text-center">
-          <p>No battles yet</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {battles.map((battle) => {
-            const char1 = characters[battle.character1];
-            const char2 = characters[battle.character2];
-            const result = battle.isDraw ? 'Draw' : (battle.winner === characterId ? 'Win' : 'Loss');
-            const resultClass = battle.isDraw ? 'text-gray-400' : (battle.winner === characterId ? 'text-green-500' : 'text-red-500');
-            
-            // Use narrative if available, otherwise fall back to explanation
-            const battleDescription = battle.narrative || battle.explanation;
-            
-            return (
-              <div key={battle.id} className="bg-gray-800 p-4 rounded-lg">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-bold ${resultClass}`}>{result}</span>
-                    <span className="text-gray-400">•</span>
-                    <span className="text-sm text-gray-400">{formatDate(battle.timestamp)}</span>
+      <div className="space-y-4">
+        {battles.map((battle) => {
+          const isCharacter1 = battle.character1 === characterId;
+          const opponentId = isCharacter1 ? battle.character2 : battle.character1;
+          const opponent = characters[opponentId];
+          
+          let resultClass = '';
+          let resultText = '';
+          
+          if (battle.isDraw) {
+            resultClass = 'bg-gray-700';
+            resultText = 'Draw';
+          } else if (battle.winner === characterId) {
+            resultClass = 'bg-green-900';
+            resultText = 'Victory';
+          } else {
+            resultClass = 'bg-red-900';
+            resultText = 'Defeat';
+          }
+          
+          return (
+            <div 
+              key={battle.id} 
+              className={`rounded-lg overflow-hidden ${resultClass}`}
+            >
+              <div className="p-4">
+                <div className="flex justify-between mb-2">
+                  <div>
+                    <span className="font-bold">{resultText}</span>
+                    <span className="mx-2">•</span>
+                    <span className="text-sm text-gray-300">
+                      {battle.timestamp ? formatDate(battle.timestamp) : 'Invalid Date'}
+                    </span>
                   </div>
                 </div>
                 
-                <div className="mb-3">
-                  <div className="flex justify-between">
-                    <div>
-                      <span className="font-medium">{char1?.name || 'Unknown'}</span>
-                      {battle.character1 === characterId && <span className="text-xs ml-1">(You)</span>}
+                <div className="mb-4">
+                  <div className="flex items-center justify-center gap-4 my-2">
+                    <div className="text-center">
+                      <div className="font-bold">
+                        {characters[characterId]?.name || characterId}
+                      </div>
+                      <div className="text-sm text-gray-400">{isCharacter1 ? '(You)' : ''}</div>
                     </div>
-                    <div>VS</div>
-                    <div>
-                      <span className="font-medium">{char2?.name || 'Unknown'}</span>
-                      {battle.character2 === characterId && <span className="text-xs ml-1">(You)</span>}
+                    
+                    <div className="text-lg font-bold">VS</div>
+                    
+                    <div className="text-center">
+                      <div className="font-bold">
+                        {opponent ? (
+                          <Link href={`/character/${encodeURIComponent(opponentId)}`} className="text-blue-400 hover:underline">
+                            {opponent.name}
+                          </Link>
+                        ) : (
+                          opponentId
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
                 
-                <div className="text-sm text-gray-300">
-                  <p>{battleDescription}</p>
-                </div>
+                <p className="text-sm text-gray-300 whitespace-pre-line">
+                  {battle.narrative || battle.explanation}
+                </p>
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

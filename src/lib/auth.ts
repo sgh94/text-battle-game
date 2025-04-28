@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { ethers } from 'ethers';
+import { getDiscordUser } from './db';
 
 // Store valid auth tokens to prevent excessive signature requests
 type AuthToken = {
@@ -58,8 +59,28 @@ export async function validateAuth(request: NextRequest) {
       
       return { isValid: true, address: address.toLowerCase() };
     }
+
+    // Check if this is Discord authentication (signature contains "discord_auth_")
+    if (signature.startsWith('discord_auth_')) {
+      // Verify Discord user exists in the database
+      const discordUserId = address;
+      const discordUser = await getDiscordUser(discordUserId);
+      
+      if (!discordUser) {
+        return { isValid: false, error: 'Discord user not found' };
+      }
+      
+      // Store valid token in cache
+      validTokens.set(cacheKey, {
+        address: discordUserId.toLowerCase(),
+        timestamp: authTime,
+        expiresAt: now + expirationTime
+      });
+      
+      return { isValid: true, address: discordUserId.toLowerCase() };
+    }
     
-    // Verify signature (in production)
+    // Verify Ethereum signature (for wallets)
     try {
       // Recreate the message that was signed
       const message = `Authenticate for Text Battle Game: ${timestamp}`;

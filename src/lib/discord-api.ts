@@ -9,7 +9,7 @@ import {
 
 // Discord API 설정
 const DISCORD_API_URL = 'https://discord.com/api/v10';
-const CLIENT_ID = "1088729716317495367";
+const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || `${process.env.VERCEL_URL || 'http://localhost:3000'}/auth/callback`;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;

@@ -8,7 +8,7 @@ export async function decideBattleWinner(
 ): Promise<BattleResult> {
   // Get Gemini API key from environment variables
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-  const GEMINI_MODEL_NAME = 'gemini-2.0-flash-latest';
+  const GEMINI_MODEL_NAME = 'gemini-1.5-flash';
 
   if (!GEMINI_API_KEY) {
     console.warn('Gemini API key not provided or invalid. Using fallback logic.');
@@ -26,7 +26,7 @@ export async function decideBattleWinner(
     const elo1 = typeof character1.elo === 'number' ? character1.elo : parseInt(character1.elo as unknown as string);
     const elo2 = typeof character2.elo === 'number' ? character2.elo : parseInt(character2.elo as unknown as string);
     const eloDiff = elo1 - elo2;
-    const eloProbability = 1 / (1 + Math.pow(10, -eloDiff / 400));
+    const eloProbability = 1 / (1 + Math.pow(10, -eloDiff / 1500));
 
     // Construct prompt for Gemini API
     const prompt = `
@@ -47,8 +47,14 @@ export async function decideBattleWinner(
     ELO Score: ${elo2}
     
     Based on ELO scores, Character 1 has a ${(eloProbability * 100).toFixed(2)}% chance of winning.
-    
-    Consider creative interactions between abilities, strengths, and weaknesses to determine the battle outcome and explain why.
+
+    **Important Rule:**
+    - You never mention the ELO score in your response.
+    - ELO score is only a reference.
+    - Use the ELO win probability as a reference when the characters are evenly matched.
+    - However, if the traits and abilities clearly create a decisive advantage for one character, you may override the ELO score and declare the winner based on abilities.
+    - Focus on how abilities interact, counter, or synergize.
+
     Your result must be returned in the following JSON format:
     {
       "winner": "character1", // or "character2" or "draw"

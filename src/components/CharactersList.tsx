@@ -40,37 +40,37 @@ export function CharactersList() {
 
   const fetchCharacters = async () => {
     if (!user?.id) return;
-    
+
     try {
       setIsLoading(true);
       console.log(`Fetching characters for user ID: ${user.id}`);
-      
+
       // Use address parameter with the user ID
       const response = await fetch(`/api/character?address=${user.id}`);
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log('Characters fetched:', data.characters);
         const fetchedCharacters = data.characters || [];
         setCharacters(fetchedCharacters);
-        
+
         // Group characters by league
         const charactersByLeague: Record<string, Character | null> = {};
-        
+
         // Initialize with null for all available leagues
         if (user.leagues) {
           user.leagues.forEach(league => {
             charactersByLeague[league] = null;
           });
         }
-        
+
         // Set characters for their respective leagues
-        fetchedCharacters.forEach(character => {
+        fetchedCharacters.forEach((character: Character) => {
           if (character.league) {
             charactersByLeague[character.league] = character;
           }
         });
-        
+
         setLeagueCharacters(charactersByLeague);
       } else {
         console.error('Failed to fetch characters:', await response.text());
@@ -122,14 +122,14 @@ export function CharactersList() {
       ) : characters.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p>No characters yet. Create your first character in one of your available leagues!</p>
-          
+
           {/* Display available leagues */}
           {user?.leagues && user.leagues.length > 0 ? (
             <div className="mt-6 grid gap-4">
               {user.leagues.map(league => {
                 const leagueInfo = getLeagueInfo(league);
                 return (
-                  <div 
+                  <div
                     key={league}
                     className="bg-gray-700 rounded-lg p-4"
                   >
@@ -138,7 +138,7 @@ export function CharactersList() {
                       <span className="font-medium">{leagueInfo.name}</span>
                     </div>
                     <p className="text-sm text-gray-400 mb-3">{leagueInfo.description}</p>
-                    <button 
+                    <button
                       onClick={() => handleCreateButtonClick(league)}
                       className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white text-sm"
                     >
@@ -159,9 +159,9 @@ export function CharactersList() {
             {user?.leagues && user.leagues.map(league => {
               const leagueInfo = getLeagueInfo(league);
               const character = leagueCharacters[league];
-              
+
               return (
-                <div 
+                <div
                   key={league}
                   className="bg-gray-800 rounded-lg overflow-hidden border border-gray-700"
                 >
@@ -169,7 +169,7 @@ export function CharactersList() {
                     <span className="text-xl mr-2">{leagueInfo.icon}</span>
                     <h4 className="font-medium">{leagueInfo.name}</h4>
                   </div>
-                  
+
                   {character ? (
                     <Link href={`/character/${character.id}`}>
                       <div className="p-4 hover:bg-gray-700 transition cursor-pointer">
@@ -191,7 +191,7 @@ export function CharactersList() {
                   ) : (
                     <div className="p-4 flex flex-col items-center justify-center text-center">
                       <p className="text-gray-400 mb-3">No character in this league yet</p>
-                      <button 
+                      <button
                         onClick={() => handleCreateButtonClick(league)}
                         className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white text-sm"
                       >

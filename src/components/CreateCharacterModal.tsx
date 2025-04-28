@@ -7,31 +7,66 @@ import { getLeagueInfo } from '@/lib/discord-roles';
 interface CreateCharacterModalProps {
   onClose: () => void;
   onSuccess: () => void;
+  initialLeague?: string | null;
 }
 
 export function CreateCharacterModal({
   onClose,
   onSuccess,
+  initialLeague = null
 }: CreateCharacterModalProps) {
   const { user } = useDiscordAuth();
   const [name, setName] = useState('');
   const [traits, setTraits] = useState('');
-  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(initialLeague);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [availableLeagues, setAvailableLeagues] = useState<string[]>([]);
+  
+  // Also track which leagues the user already has characters in
+  const [leaguesWithCharacters, setLeaguesWithCharacters] = useState<string[]>([]);
 
   // Set default selected league when user data is loaded
   useEffect(() => {
     if (user?.leagues && user.leagues.length > 0) {
       setAvailableLeagues(user.leagues);
       
-      // Select first available league by default
+      // If no initial league is provided, select first available
       if (!selectedLeague && user.leagues.length > 0) {
         setSelectedLeague(user.leagues[0]);
       }
+      
+      // Check which leagues already have characters
+      checkExistingCharacters();
     }
-  }, [user, selectedLeague]);
+  }, [user, selectedLeague, initialLeague]);
+
+  // Check for existing characters in each league
+  const checkExistingCharacters = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const response = await fetch(`/api/character?address=${user.id}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const characters = data.characters || [];
+        
+        // Get the leagues that already have characters
+        const leagues = characters.map((char: any) => char.league).filter(Boolean);
+        setLeaguesWithCharacters(leagues);
+        
+        // If the initially selected league already has a character, show error
+        if (selectedLeague && leagues.includes(selectedLeague)) {
+          setError(`You already have a character in the ${getLeagueInfo(selectedLeague).name} league.`);
+        } else {
+          setError('');
+        }
+      }
+    } catch (error) {
+      console.error('Error checking existing characters:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +78,12 @@ export function CreateCharacterModal({
 
     if (!selectedLeague) {
       setError('Please select a league');
+      return;
+    }
+
+    // Check if user already has a character in this league
+    if (leaguesWithCharacters.includes(selectedLeague)) {
+      setError(`You already have a character in the ${getLeagueInfo(selectedLeague).name} league. Only one character per league is allowed.`);
       return;
     }
 
@@ -94,6 +135,13 @@ export function CreateCharacterModal({
     }
   };
 
+  // Filter available leagues to only show those without characters
+  const getAvailableLeaguesWithoutCharacters = () => {
+    return availableLeagues.filter(league => !leaguesWithCharacters.includes(league));
+  };
+
+  const noAvailableLeagues = getAvailableLeaguesWithoutCharacters().length === 0;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
@@ -104,6 +152,12 @@ export function CreateCharacterModal({
             <p className="mb-2 font-bold">No League Access</p>
             <p>You don't have any Discord roles that grant league access.</p>
             <p className="mt-2 text-sm">Join the Discord server and get the necessary roles to participate in leagues.</p>
+          </div>
+        ) : noAvailableLeagues ? (
+          <div className="bg-yellow-900/30 border border-yellow-500 p-4 rounded-lg mb-4">
+            <p className="mb-2 font-bold">All Leagues Filled</p>
+            <p>You already have characters in all available leagues.</p>
+            <p className="mt-2 text-sm">Each player can have only one character per league.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
@@ -140,7 +194,7 @@ export function CreateCharacterModal({
                 Choose a League
               </label>
               <div className="grid grid-cols-1 gap-3">
-                {availableLeagues.map(league => {
+                {getAvailableLeaguesWithoutCharacters().map(league => {
                   const leagueInfo = getLeagueInfo(league);
                   return (
                     <button
@@ -183,7 +237,7 @@ export function CreateCharacterModal({
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || !selectedLeague}
+                disabled={isSubmitting || !selectedLeague || noAvailableLeagues}
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md flex items-center gap-2 disabled:bg-indigo-800 disabled:opacity-70"
               >
                 {isSubmitting && (

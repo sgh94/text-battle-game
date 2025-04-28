@@ -229,6 +229,7 @@ export async function POST(request: NextRequest) {
         explanation: result.explanation,
         timestamp: Date.now(),
         narrative: result.explanation,
+        league: character.league,
       };
 
       await kv.hset(battleId, battleResult as Record<string, unknown>);
@@ -280,6 +281,7 @@ export async function POST(request: NextRequest) {
         explanation: result.explanation,
         timestamp: Date.now(),
         narrative: result.explanation,
+        league: character.league,
       };
 
       await kv.hset(battleId, battleResult as Record<string, unknown>);

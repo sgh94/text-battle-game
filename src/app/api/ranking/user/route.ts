@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     // Get the user's characters
     const characterIds = await kv.smembers(`user:${userId}:characters`);
-    
+
     if (!characterIds || characterIds.length === 0) {
       return NextResponse.json({ ranking: null });
     }
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     // Get the ranking for the specified league
     const rankingKey = `league:${league}:ranking`;
     const exists = await kv.exists(rankingKey);
-    
+
     if (!exists) {
       return NextResponse.json({ ranking: null });
     }
@@ -49,17 +49,18 @@ export async function GET(request: NextRequest) {
     // For each character, find its rank in the specified league
     for (const character of characters) {
       // Get the character's rank in the league
-      const rankWithScore = await kv.zrevrank(rankingKey, character.id, { withScore: true });
-      
-      if (!rankWithScore) continue;
-      
-      const [rank, elo] = rankWithScore;
-      
+      // Get the character's rank in the league
+      const rank = await kv.zrevrank(rankingKey, character.id);
+
+      if (rank === null) continue;
+
+      // Get the character's score (ELO)
+      const elo = await kv.zscore(rankingKey, character.id);
       // Check if this is the highest ranked character for this user
       if (highestRankedCharacter === null || rank < highestRank) {
         highestRankedCharacter = character;
         highestRank = rank;
-        highestElo = elo;
+        highestElo = elo || 0;
       }
     }
 

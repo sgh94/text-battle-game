@@ -120,6 +120,16 @@ The app uses Discord OAuth2 for authentication and role management, supporting:
 - Role-based league assignment
 - Automatic role updates
 
+## League System
+
+The game features multiple leagues based on Discord roles:
+- Bronze League - Default league for all players
+- Silver League - For players with proven skills
+- Gold League - For experienced players
+- Platinum League - The elite league for top players
+
+Players can belong to multiple leagues based on their Discord roles, but compete primarily in their highest tier league.
+
 ## License
 
 MIT

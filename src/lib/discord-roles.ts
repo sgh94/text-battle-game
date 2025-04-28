@@ -24,7 +24,6 @@ export const LEAGUES = {
     color: '#cd7f32',
     icon: '🥉',
     description: '모든 플레이어를 위한 시작 리그',
-    minRating: 0,
     order: 1
   },
   silver: {
@@ -33,7 +32,6 @@ export const LEAGUES = {
     color: '#c0c0c0',
     icon: '🥈',
     description: '일정 수준의 실력을 갖춘 플레이어를 위한 리그',
-    minRating: 1000,
     order: 2
   },
   gold: {
@@ -42,7 +40,6 @@ export const LEAGUES = {
     color: '#ffd700',
     icon: '🥇',
     description: '숙련된 플레이어를 위한 리그',
-    minRating: 1500,
     order: 3
   },
   platinum: {
@@ -51,7 +48,6 @@ export const LEAGUES = {
     color: '#e5e4e2',
     icon: '💎',
     description: '최상위 플레이어를 위한 엘리트 리그',
-    minRating: 2000,
     order: 4
   },
 };
@@ -84,14 +80,16 @@ export function determineUserLeagues(roles: string[]): string[] {
   return Array.from(leagues);
 }
 
-// 사용자의 주요 리그(가장 높은 등급의 리그) 결정
+// 사용자의 주요 리그 결정 (가장 최근에 선택한 리그 또는 기본값)
 export function getPrimaryLeague(leagues: string[]): string {
-  // 리그 우선순위 (높은 등급부터)
-  const leaguePriority = ['platinum', 'gold', 'silver', 'bronze'];
+  // 사용자가 접근 가능한 리그가 하나만 있는 경우, 그것이 주 리그
+  if (leagues.length === 1) {
+    return leagues[0];
+  }
   
-  // 사용자가 접근 가능한 가장 높은 등급의 리그 찾기
-  for (const league of leaguePriority) {
-    if (leagues.includes(league)) {
+  // 사용자가 접근 가능한 리그가 여러 개인 경우, 첫 번째 비브론즈 리그를 반환
+  for (const league of leagues) {
+    if (league !== 'bronze') {
       return league;
     }
   }
@@ -107,7 +105,6 @@ export function getLeagueInfo(leagueId: string) {
     color: '#888888',
     icon: '🏆',
     description: 'A league for battlers',
-    minRating: 0,
     order: 0
   };
 }
@@ -149,7 +146,7 @@ export function generateRoleDescription(roles: string[]): string {
   const primaryLeague = getPrimaryLeague(leagues);
   const primaryLeagueInfo = getLeagueInfo(primaryLeague);
   
-  let description = `주 리그: ${primaryLeagueInfo.name} (${primaryLeagueInfo.icon})`;
+  let description = `주 선택 리그: ${primaryLeagueInfo.name} (${primaryLeagueInfo.icon})`;
   
   if (leagues.length > 1) {
     const otherLeagues = leagues

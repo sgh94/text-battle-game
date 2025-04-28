@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useWeb3 } from '@/providers/Web3Provider';
+import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 import Link from 'next/link';
 import { CreateCharacterModal } from './CreateCharacterModal';
 
@@ -16,27 +16,26 @@ interface Character {
 }
 
 export function CharactersList() {
-  const { address, isConnected, authHeader, signAuthMessage } = useWeb3();
+  const { user, isConnected } = useDiscordAuth();
   const [characters, setCharacters] = useState<Character[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [waitingForAuth, setWaitingForAuth] = useState(false);
 
   // Fetch characters when connected
   useEffect(() => {
-    if (isConnected && address) {
+    if (isConnected && user?.id) {
       fetchCharacters();
     } else {
       setCharacters([]);
     }
-  }, [isConnected, address, authHeader]); // authHeader added to reload character list when changed
+  }, [isConnected, user?.id]);
 
   const fetchCharacters = async () => {
-    if (!address) return;
+    if (!user?.id) return;
     
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/character?address=${address}`);
+      const response = await fetch(`/api/character?userId=${user.id}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -49,25 +48,8 @@ export function CharactersList() {
     }
   };
 
-  const handleCreateButtonClick = async () => {
-    // Try to create authHeader if not existing
-    if (!authHeader) {
-      setWaitingForAuth(true);
-      try {
-        await signAuthMessage();
-        // Wait for authHeader to be set in state before showing modal
-        setTimeout(() => {
-          setWaitingForAuth(false);
-          setShowModal(true);
-        }, 500);
-      } catch (error) {
-        console.error('Error generating auth header:', error);
-        setWaitingForAuth(false);
-      }
-    } else {
-      // Show modal directly if authHeader already exists
-      setShowModal(true);
-    }
+  const handleCreateButtonClick = () => {
+    setShowModal(true);
   };
 
   const handleCreateSuccess = () => {
@@ -78,7 +60,7 @@ export function CharactersList() {
   if (!isConnected) {
     return (
       <div className="mt-8 text-center">
-        <p>Connect your wallet to view your characters</p>
+        <p>Connect with Discord to view your characters</p>
       </div>
     );
   }
@@ -87,30 +69,19 @@ export function CharactersList() {
     <div className="mt-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">My Characters</h2>
-        {characters.length < 5 && (
+        {characters.length < 1 && ( // 계정당 하나의 캐릭터 제한
           <button
             onClick={handleCreateButtonClick}
-            disabled={waitingForAuth}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm disabled:opacity-50"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md text-sm"
           >
-            {waitingForAuth ? (
-              <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Authenticating...
-              </span>
-            ) : (
-              'Add Character'
-            )}
+            Add Character
           </button>
         )}
       </div>
 
       {isLoading ? (
         <div className="flex justify-center my-8">
-          <svg className="animate-spin h-8 w-8 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <svg className="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
@@ -144,7 +115,6 @@ export function CharactersList() {
 
       {showModal && (
         <CreateCharacterModal
-          authHeader={authHeader || ''}
           onClose={() => setShowModal(false)}
           onSuccess={handleCreateSuccess}
         />

@@ -15,6 +15,7 @@ interface Character {
   losses: number;
   draws: number;
   league: string;
+  owner: string;
 }
 
 export function CharactersList() {
@@ -70,6 +71,12 @@ export function CharactersList() {
   const getAvailableLeagues = () => {
     if (!user?.leagues) return ['general'];
     return user.leagues;
+  };
+  
+  // Format owner IDs to show only 3 digits at each end
+  const formatOwnerId = (id: string) => {
+    if (!id) return '';
+    return `${id.substring(0, 3)}...${id.substring(id.length - 3)}`;
   };
 
   if (!isConnected) {
@@ -142,6 +149,7 @@ export function CharactersList() {
                       )}
                     </div>
                     <p className="text-gray-400 truncate max-w-md">{character.traits}</p>
+                    <div className="text-xs text-gray-500 mt-1">ID: {formatOwnerId(character.owner)}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-lg font-bold">{character.elo} Elo</div>

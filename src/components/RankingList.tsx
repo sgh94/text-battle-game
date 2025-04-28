@@ -30,12 +30,11 @@ export function RankingList() {
   const [userRanking, setUserRanking] = useState<UserRanking | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState('general');
-  const [availableLeagues, setAvailableLeagues] = useState<string[]>(['general']);
+  const [allLeagues, setAllLeagues] = useState<string[]>(['general', 'veteran', 'community', 'morse']);
 
   useEffect(() => {
-    // Set available leagues based on user access
+    // Set user's available leagues if they're logged in
     if (user?.leagues && user.leagues.length > 0) {
-      setAvailableLeagues(user.leagues);
       // Default to the user's primary league if they have one
       if (user.primaryLeague) {
         setSelectedLeague(user.primaryLeague);
@@ -83,10 +82,10 @@ export function RankingList() {
     }
   };
 
-  // Format owner address
+  // Format owner address to show only 3 digits at each end
   const formatAddress = (addr: string) => {
     if (!addr) return '';
-    return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+    return `${addr.substring(0, 3)}...${addr.substring(addr.length - 3)}`;
   };
 
   // Check if user ranking is already in top 10
@@ -102,7 +101,7 @@ export function RankingList() {
         
         {/* League selector */}
         <div className="flex space-x-2 overflow-x-auto pb-2">
-          {availableLeagues.map(league => {
+          {allLeagues.map(league => {
             const leagueInfo = getLeagueInfo(league);
             return (
               <button
@@ -133,7 +132,7 @@ export function RankingList() {
       ) : rankings.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p>No rankings available for {getLeagueInfo(selectedLeague).name}</p>
-          {user && (
+          {user && user.leagues.includes(selectedLeague) && (
             <p className="mt-2 text-gray-400">
               Create a character in this league to be the first on the leaderboard!
             </p>

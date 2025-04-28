@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useWeb3 } from '@/providers/Web3Provider';
+import { useDiscordAuth } from './useDiscordAuth';
 
 export function useAuthRedirect(requireAuth = true) {
-  const { isConnected } = useWeb3();
+  const { isConnected } = useDiscordAuth();
   const router = useRouter();
 
   useEffect(() => {

@@ -90,7 +90,7 @@ export function DiscordLoginButton() {
 
   // League color
   const getLeagueColor = () => {
-    if (!user?.primaryLeague) return '';
+    if (!user?.primaryLeague) return '#888888';
 
     const league = LEAGUES[user.primaryLeague as keyof typeof LEAGUES];
     return league ? league.color : '#888888';
@@ -102,6 +102,29 @@ export function DiscordLoginButton() {
 
     const league = LEAGUES[user.primaryLeague as keyof typeof LEAGUES];
     return league ? league.icon : '🏆';
+  };
+
+  // Get primary league name
+  const getPrimaryLeagueName = () => {
+    if (!user?.primaryLeague) return 'Bronze';
+    
+    // Safely get the first character and capitalize it
+    const firstChar = user.primaryLeague.charAt(0).toUpperCase();
+    // Safely get the rest of the string
+    const rest = user.primaryLeague.slice(1) || '';
+    
+    return firstChar + rest;
+  };
+
+  // Get username with fallback
+  const getUsername = () => {
+    return user?.username || 'User';
+  };
+
+  // Get username first character for avatar fallback
+  const getUsernameInitial = () => {
+    const username = getUsername();
+    return username.charAt(0).toUpperCase() || 'U';
   };
 
   return (
@@ -128,7 +151,7 @@ export function DiscordLoginButton() {
 
           {/* Error message for Discord client ID not configured */}
           <div className="text-red-500 text-sm mt-2">
-            {process.env.DISCORD_CLIENT_ID
+            {process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID
               ? ''
               : 'Discord client ID not configured'}
           </div>
@@ -144,28 +167,28 @@ export function DiscordLoginButton() {
               <div className="w-8 h-8 rounded-full overflow-hidden">
                 <img
                   src={getUserAvatarUrl()!}
-                  alt={user?.username || 'User'}
+                  alt={getUsername()}
                   className="w-full h-full object-cover"
                 />
               </div>
             ) : (
               <div className="w-8 h-8 bg-indigo-200 dark:bg-indigo-700 rounded-full flex items-center justify-center">
                 <span className="text-indigo-700 dark:text-indigo-200 text-sm font-bold">
-                  {user?.username?.charAt(0).toUpperCase() || 'U'}
+                  {getUsernameInitial()}
                 </span>
               </div>
             )}
 
             <div className="flex flex-col text-left">
               <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                {user?.username || 'User'}
+                {getUsername()}
               </span>
               <div className="flex items-center">
                 <span
                   className="text-xs px-1.5 py-0.5 rounded-full font-medium"
                   style={{ backgroundColor: getLeagueColor() + '33', color: getLeagueColor() }}
                 >
-                  {getLeagueIcon()} {user?.primaryLeague ? user.primaryLeague.charAt(0).toUpperCase() + user.primaryLeague.slice(1) : 'Bronze'}
+                  {getLeagueIcon()} {getPrimaryLeagueName()}
                 </span>
               </div>
             </div>

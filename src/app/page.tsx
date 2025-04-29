@@ -3,7 +3,7 @@
 import { DiscordLoginButton } from '@/components/DiscordLoginButton';
 import { CharactersList } from '@/components/CharactersList';
 import { LeagueSelector } from '@/components/LeagueSelector';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 import { useRouter } from 'next/navigation';
@@ -13,6 +13,8 @@ export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const { isConnected, isConnecting, user, error } = useDiscordAuth();
   const [loginChecked, setLoginChecked] = useState(false);
+  // 라우터 리프레시 추적을 위한 ref (반복 호출 방지)
+  const refreshedRef = useRef(false);
 
   // This ensures hydration issues are avoided
   useEffect(() => {
@@ -47,11 +49,16 @@ export default function Home() {
     }
   }, [isConnected, isConnecting]);
 
-  // Force router update if login state changes
+  // Force router update only on login/logout
   useEffect(() => {
-    // User has been loaded - refresh UI
-    if (user) {
+    // 사용자가 로그인하거나 로그아웃할 때만 UI 리프레시하고, 한 번만 실행
+    if (user && !refreshedRef.current) {
+      refreshedRef.current = true;
+      // 사용자 정보 변경 시 단 한 번만 리프레시
       router.refresh();
+    } else if (!user && refreshedRef.current) {
+      // 로그아웃 시 리프레시 상태 초기화
+      refreshedRef.current = false;
     }
   }, [user, router]);
 
@@ -117,36 +124,36 @@ export default function Home() {
             <p className="text-gray-400 mb-4">
               Summon your heroes and enter the arena. Compete across leagues by connecting with Discord.
             </p>
-            
-            {/* Connection status check */}
-            <div className="mt-4 text-sm text-gray-500">
-              <p>디스코드 로그인 상태: {isConnected ? '연결됨' : '연결되지 않음'}</p>
-              <p>연결 시도 중: {isConnecting ? '예' : '아니오'}</p>
-              {isClient && (
-                <p>토큰 존재: {localStorage.getItem('discord_access_token') ? '예' : '아니오'}</p>
-              )}
-            </div>
           </div>
         )}
       </div>
 
-      {/* Health check button for debugging */}
-      <div className="fixed bottom-4 right-4">
-        <button
-          onClick={async () => {
-            try {
-              const res = await fetch('/api/health');
-              const data = await res.json();
-              alert('Health check: ' + JSON.stringify(data));
-            } catch (err) {
-              alert('Health check failed: ' + (err instanceof Error ? err.message : String(err)));
-            }
-          }}
-          className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1 rounded"
-        >
-          Health Check
-        </button>
-      </div>
+      {/* 개발 모드일 때만 디버깅 정보 표시 */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="fixed bottom-4 right-4 flex flex-col gap-2 text-xs bg-gray-800 p-2 rounded shadow">
+          <div>
+            <div>연결 상태: {isConnected ? '연결됨' : '연결되지 않음'}</div>
+            <div>연결 중: {isConnecting ? '예' : '아니오'}</div>
+            {isClient && (
+              <div>토큰 존재: {localStorage.getItem('discord_access_token') ? '예' : '아니오'}</div>
+            )}
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+                alert('Health check: ' + JSON.stringify(data));
+              } catch (err) {
+                alert('Health check failed: ' + (err instanceof Error ? err.message : String(err)));
+              }
+            }}
+            className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded"
+          >
+            Health Check
+          </button>
+        </div>
+      )}
     </main>
   );
 }

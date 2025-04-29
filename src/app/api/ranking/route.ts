@@ -11,66 +11,71 @@ export async function GET(request: NextRequest) {
     const league = request.nextUrl.searchParams.get('league') || 'general';
 
     console.log(`Fetching rankings for league: ${league}`);
-
-    // Get all characters first to properly filter by league
-    const allCharacterKeys = await kv.keys('character:*');
     
-    if (!allCharacterKeys || allCharacterKeys.length === 0) {
-      console.log('No characters found');
+    // 리그별 랭킹 키
+    const rankingKey = `league:${league}:ranking`;
+    
+    // 1. 해당 리그의 sorted set이 있는지 확인
+    const exists = await kv.exists(rankingKey);
+    if (!exists) {
+      console.log(`Ranking for league ${league} doesn't exist yet`);
       return NextResponse.json({ rankings: [] });
     }
     
-    // Fetch all characters
-    const charactersPromises = allCharacterKeys.map(key => 
-      kv.hgetall<Character>(key)
+    // 2. Top N 캐릭터 ID 가져오기 (점수 내림차순)
+    const topRankings = await kv.zrevrange(rankingKey, 0, limit - 1, { withScores: true });
+    if (!topRankings || topRankings.length === 0) {
+      console.log(`No rankings found for league ${league}`);
+      return NextResponse.json({ rankings: [] });
+    }
+    
+    // 3. ID와 점수를 분리
+    const characterScores: Array<{id: string, score: number}> = [];
+    for (let i = 0; i < topRankings.length; i += 2) {
+      const id = String(topRankings[i]);
+      const score = Number(topRankings[i + 1]);
+      characterScores.push({ id, score });
+    }
+    
+    console.log(`Found ${characterScores.length} top characters for league ${league}`);
+    
+    // 4. 캐릭터 상세 정보 가져오기 (병렬 요청)
+    const rankingsData = await Promise.all(
+      characterScores.map(async ({ id, score }, index) => {
+        try {
+          // 캐릭터 정보 가져오기
+          const character = await kv.hgetall<Character>(`character:${id}`);
+          
+          if (!character) {
+            console.log(`Character ${id} not found`);
+            return null;
+          }
+          
+          // 리그 필터링 (general은 전체 포함, 그 외에는 해당 리그만)
+          if (league !== 'general' && character.league !== league) {
+            console.log(`Character ${id} (${character.name}) has league ${character.league}, not ${league}`);
+            return null;
+          }
+          
+          // 랭킹 정보 추가
+          return {
+            ...character,
+            rank: offset + index + 1,
+            elo: score // Sorted Set의 점수 사용
+          };
+        } catch (err) {
+          console.error(`Error fetching character ${id}:`, err);
+          return null;
+        }
+      })
     );
     
-    const allCharacters = await Promise.all(charactersPromises);
+    // 유효한 결과만 필터링
+    const validRankings = rankingsData.filter(Boolean);
     
-    // Filter characters that belong to the requested league
-    const leagueCharacters = allCharacters.filter(character => {
-      if (!character) return false;
-      
-      // For 'general' league, include all characters
-      if (league === 'general') return true;
-      
-      // Otherwise, strictly match the requested league
-      return character.league === league;
-    });
+    console.log(`Returning ${validRankings.length} ranked characters for league ${league}`);
     
-    console.log(`Found ${leagueCharacters.length} characters in league ${league}`);
-    
-    // Sort characters by ELO score (descending)
-    leagueCharacters.sort((a, b) => {
-      // Type assertion since we've filtered out null values
-      const aElo = (a as Character).elo || 0;
-      const bElo = (b as Character).elo || 0;
-      return bElo - aElo;
-    });
-    
-    // Apply pagination
-    const paginatedCharacters = leagueCharacters.slice(offset, offset + limit);
-    
-    // Format the result with rank information
-    const rankings = paginatedCharacters.map((character, index) => {
-      if (!character) return null;
-      
-      return {
-        ...character,
-        rank: offset + index + 1,
-      };
-    }).filter(Boolean);
-    
-    console.log(`Returning ${rankings.length} ranked characters`);
-    console.log('First few rankings:', rankings.slice(0, 3).map(r => ({
-      id: r.id,
-      name: r.name,
-      league: r.league,
-      rank: r.rank,
-      elo: r.elo
-    })));
-
-    return NextResponse.json({ rankings });
+    return NextResponse.json({ rankings: validRankings });
   } catch (error) {
     console.error('Error fetching rankings:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

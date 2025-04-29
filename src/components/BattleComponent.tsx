@@ -163,7 +163,7 @@ export function BattleComponent() {
   if (!isConnected) {
     return (
       <div className="mt-8 text-center">
-        <p>Connect with Discord to battle with your characters</p>
+        <p>Connect Discord to summon your heroes</p>
         <Link href="/" className="text-blue-400 hover:underline mt-4 inline-block">
           Go to Home
         </Link>

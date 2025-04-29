@@ -28,8 +28,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 // 정확한 리다이렉트 URI - Discord 개발자 포털에 등록된 URI와 일치해야 함
-const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-  ? 'http://localhost:3000/auth/callback' 
+const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? 'http://localhost:3000/auth/callback'
   : 'https://character-battle-game.vercel.app/auth/callback';
 
 // Create exponential backoff mechanism
@@ -44,7 +44,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  
+
   // 사용자 정보 가져오기가 진행 중인지 추적하는 ref - 중복 요청 방지
   const fetchingUserInfo = useRef(false);
   // 이미 로그인 시도를 했는지 추적
@@ -64,11 +64,11 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       console.log('User info fetch already in progress, skipping...');
       return null;
     }
-    
+
     try {
       fetchingUserInfo.current = true;
       console.log('Fetching user info, attempt:', retries + 1);
-      
+
       const response = await fetch('/api/auth/user', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -82,22 +82,22 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
           console.log('Rate limited, waiting to retry...');
           const retryAfter = response.headers.get('Retry-After') || '2';
           const delay = parseInt(retryAfter, 10) * 1000 || 2000;
-          
+
           await new Promise(resolve => setTimeout(resolve, delay));
           fetchingUserInfo.current = false;
           return fetchUserInfo(accessToken, retries + 1);
         }
-        
+
         // If we get server errors (5xx), also retry 
         if (response.status >= 500 && response.status < 600 && retries < 3) {
           console.log(`Server error (${response.status}), waiting to retry...`);
           const delay = createBackoffDelay(retries);
-          
+
           await new Promise(resolve => setTimeout(resolve, delay));
           fetchingUserInfo.current = false;
           return fetchUserInfo(accessToken, retries + 1);
         }
-        
+
         console.error('Failed to fetch user info:', await response.text());
         throw new Error('Failed to fetch user info');
       }
@@ -106,7 +106,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
       // Make sure roles is always an array
       const roles = Array.isArray(userData.roles) ? userData.roles : [];
-      
+
       // Determine available leagues based on roles
       const userLeagues = determineUserLeagues(roles);
       const primaryLeague = getPrimaryLeague(userLeagues);
@@ -135,7 +135,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       return userInfo;
     } catch (err) {
       console.error('Error fetching user info:', err);
-      
+
       // Only retry for network errors, not for logical errors
       if (retries < 3 && (err instanceof TypeError || (err as any)?.code === 'FETCH_ROLES_FAILED')) {
         console.log('Retrying user info fetch after error...');
@@ -143,7 +143,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
         fetchingUserInfo.current = false;
         return fetchUserInfo(accessToken, retries + 1);
       }
-      
+
       throw err;
     } finally {
       fetchingUserInfo.current = false;
@@ -195,7 +195,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     localStorage.removeItem('discord_auth_state');
     localStorage.removeItem('discord_code_verifier');
     setUser(null);
-    
+
     // API 요청 추적 초기화
     fetchingUserInfo.current = false;
     initialAuthCheckDone.current = false;
@@ -210,17 +210,17 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     if (initialAuthCheckDone.current) {
       return;
     }
-    
+
     const checkAuth = async () => {
       try {
         setIsConnecting(true);
-        
+
         // 콜백 URL 체크
         if (typeof window !== 'undefined') {
           const urlParams = new URLSearchParams(window.location.search);
           isCallbackUrl.current = !!urlParams.get('code');
         }
-        
+
         // Check if there's a token in localStorage and if it's not expired
         const accessToken = localStorage.getItem('discord_access_token');
         const expiresAt = Number(localStorage.getItem('discord_expires_at') || '0');
@@ -265,9 +265,9 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     // URL에 코드 파라미터가 있는 경우에만 실행 - 불필요한 실행 방지
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
-    
+
     if (!code) return; // 코드가 없으면 콜백이 아니므로 처리하지 않음
-    
+
     isCallbackUrl.current = true; // 콜백 URL 표시
 
     const handleCallback = async () => {
@@ -295,14 +295,14 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
           // Clean up localStorage
           localStorage.removeItem('discord_auth_state');
-          
+
           // Exchange code for token
           const tokenResponse = await fetch('/api/auth/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              code, 
-              codeVerifier 
+            body: JSON.stringify({
+              code,
+              codeVerifier
             }),
           });
 
@@ -311,15 +311,15 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
             if (tokenResponse.status === 429) {
               const retryAfter = tokenResponse.headers.get('Retry-After') || '2';
               const delay = parseInt(retryAfter, 10) * 1000 || 2000;
-              
-              setError(`Rate limited by Discord. Retrying automatically in ${Math.ceil(delay/1000)} seconds...`);
-              
+
+              setError(`Rate limited by Discord. Retrying automatically in ${Math.ceil(delay / 1000)} seconds...`);
+
               // Wait and retry
               await new Promise(resolve => setTimeout(resolve, delay));
               handleCallback();
               return;
             }
-            
+
             const errorData = await tokenResponse.json().catch(() => ({ error: 'Failed to parse error response' }));
             throw new Error(`Token exchange failed: ${errorData.error || tokenResponse.statusText}`);
           }
@@ -339,7 +339,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
           // Fetch user info with the new token
           await fetchUserInfo(tokenData.access_token);
-          
+
           // 콜백 처리 후에만 리프레시 필요함
           router.refresh();
         } catch (err) {
@@ -388,7 +388,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
       // Generate PKCE code verifier and challenge
       const codeVerifier = generateRandomString(128);
-      
+
       // Generate state parameter
       const state = generateRandomString(40);
       localStorage.setItem('discord_auth_state', state);
@@ -417,7 +417,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
         const authUrl = `${baseUrl}?${params.toString()}`;
         console.log('Redirecting to:', authUrl);
-        
+
         window.location.href = authUrl;
       }).catch(err => {
         console.error('Error generating code challenge:', err);

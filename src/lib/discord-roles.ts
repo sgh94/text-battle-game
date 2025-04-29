@@ -17,7 +17,7 @@ export const LEAGUES = {
     color: '#6a7ec7',
     icon: '1️⃣',
     description: 'For every Mitosian brave enough to enter the arena.',
-    eligibility: 'Have the THB League 1 role in Mitosis Discord',
+    eligibility: 'THB League 1 role in Mitosis Discord',
     order: 1
   },
   veteran: {

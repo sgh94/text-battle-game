@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 // Auth status type
-type AuthStatus = 'processing' | 'connecting' | 'success' | 'error';
+type AuthStatus = 'processing' | 'connecting' | 'success' | 'error' | 'retrying';
 
 // User info type
 interface DiscordUser {
@@ -24,6 +24,83 @@ function DiscordCallbackInner() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [user, setUser] = useState<DiscordUser | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    // If authentication fails but with rate limiting, we'll try to auto-recover
+    if (status === 'error' && errorCode === 'FETCH_ROLES_FAILED' && retryCount < 3) {
+      const timer = setTimeout(() => {
+        setStatus('retrying');
+        setRetryCount(prev => prev + 1);
+        
+        // Check for existing token and try to use it
+        const token = localStorage.getItem('discord_access_token');
+        if (token) {
+          getUserData(token);
+        } else {
+          router.push('/');
+        }
+      }, 2000 * (retryCount + 1)); // Progressive backoff
+      
+      return () => clearTimeout(timer);
+    }
+  }, [status, errorCode, retryCount, router]);
+
+  // Helper function for fetching user data
+  const getUserData = async (token: string) => {
+    try {
+      const userResponse = await fetch('/api/auth/user', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!userResponse.ok) {
+        if (userResponse.status === 429) {
+          // If rate limited, we'll auto-retry
+          const retryAfter = userResponse.headers.get('Retry-After') || '2';
+          const delay = parseInt(retryAfter, 10) * 1000 || 2000;
+          
+          setErrorMessage(`Rate limited by Discord. Retrying in ${Math.ceil(delay/1000)} seconds...`);
+          setErrorCode('RATE_LIMITED');
+          
+          setTimeout(() => {
+            setStatus('retrying');
+            getUserData(token);
+          }, delay);
+          return;
+        }
+        
+        throw new Error('Failed to fetch user data');
+      }
+
+      // Extract user data
+      const userData = await userResponse.json();
+      setUser(userData);
+      console.log('User data retrieved successfully');
+
+      // Set success status
+      setStatus('success');
+
+      // Redirect to home page after a short delay
+      setTimeout(() => {
+        router.push('/');
+      }, 1500);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      setErrorMessage('Error fetching user data. Will try again automatically.');
+      
+      if (retryCount < 3) {
+        setTimeout(() => {
+          setStatus('retrying');
+          getUserData(token);
+        }, 2000);
+      } else {
+        setStatus('error');
+        setErrorMessage('Failed to retrieve user data after multiple attempts.');
+      }
+    }
+  };
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -74,23 +151,28 @@ function DiscordCallbackInner() {
 
         // Handle response
         if (!response.ok) {
+          // Check if we're rate limited and need to wait
+          if (response.status === 429) {
+            const retryAfter = response.headers.get('Retry-After') || '2';
+            const delay = parseInt(retryAfter, 10) * 1000 || 2000;
+            
+            setErrorMessage(`Rate limited by Discord. Retrying in ${Math.ceil(delay/1000)} seconds...`);
+            setErrorCode('RATE_LIMITED');
+            
+            // Wait and retry
+            setTimeout(() => {
+              setRetryCount(prev => prev + 1);
+              handleCallback();
+            }, delay);
+            return;
+          }
+          
           const errorData = await response.json().catch(() => ({ error: 'Unknown error', code: 'UNKNOWN_ERROR' }));
           throw new Error(errorData.error || `Failed to authenticate with Discord (${response.status})`);
         }
 
         const tokenData = await response.json();
         console.log('Token exchange successful');
-
-        // Now fetch user info with the token
-        const userResponse = await fetch('/api/auth/user', {
-          headers: {
-            'Authorization': `Bearer ${tokenData.access_token}`,
-          },
-        });
-
-        if (!userResponse.ok) {
-          throw new Error('Failed to fetch user data');
-        }
 
         // Store the token in localStorage
         localStorage.setItem('discord_access_token', tokenData.access_token);
@@ -103,18 +185,8 @@ function DiscordCallbackInner() {
         // We no longer need the code verifier
         localStorage.removeItem('discord_code_verifier');
 
-        // Extract user data
-        const userData = await userResponse.json();
-        setUser(userData);
-        console.log('User data retrieved successfully');
-
-        // Set success status
-        setStatus('success');
-
-        // Redirect to home page after a short delay
-        setTimeout(() => {
-          router.push('/');
-        }, 2000);
+        // Now get the user data
+        await getUserData(tokenData.access_token);
 
       } catch (error) {
         console.error('Error handling Discord callback:', error);
@@ -127,13 +199,23 @@ function DiscordCallbackInner() {
           setErrorMessage('An unknown error occurred during Discord authentication.');
         }
 
-        // Set error code (if available)
-        setErrorCode((error as any)?.code || 'UNKNOWN_ERROR');
+        // Check if we already have a token and can recover
+        const token = localStorage.getItem('discord_access_token');
+        if (token && retryCount < 2) {
+          setTimeout(() => {
+            setStatus('retrying');
+            setRetryCount(prev => prev + 1);
+            getUserData(token);
+          }, 2000);
+        } else {
+          // Set error code (if available)
+          setErrorCode((error as any)?.code || 'UNKNOWN_ERROR');
+        }
       }
     };
 
     handleCallback();
-  }, [searchParams, router]);
+  }, [searchParams, router, retryCount]);
 
   // Generate Discord user avatar URL
   const getAvatarUrl = () => {
@@ -161,12 +243,13 @@ function DiscordCallbackInner() {
         <h1 className="text-2xl font-bold mb-6 text-center">
           {status === 'processing' && 'Processing Discord authentication...'}
           {status === 'connecting' && 'Connecting to Discord...'}
+          {status === 'retrying' && 'Retrying connection...'}
           {status === 'success' && 'Discord connection successful!'}
-          {status === 'error' && 'Connection failed'}
+          {status === 'error' && 'Connection issue'}
         </h1>
 
         <div className="flex justify-center mb-6">
-          {status === 'processing' && (
+          {(status === 'processing' || status === 'retrying') && (
             <div className="animate-spin h-10 w-10 border-4 border-indigo-500 rounded-full border-t-transparent"></div>
           )}
 
@@ -220,31 +303,44 @@ function DiscordCallbackInner() {
             </div>
           )}
 
-          {status === 'error' && (
-            <div className="bg-red-50 text-red-700 p-6 rounded-md text-center w-full">
+          {(status === 'error' || errorMessage) && (
+            <div className={`${status === 'retrying' ? 'bg-yellow-50 text-yellow-700' : 'bg-red-50 text-red-700'} p-6 rounded-md text-center w-full`}>
               <div className="flex justify-center mb-2">
-                <div className="bg-red-100 rounded-full p-2">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                <div className={`${status === 'retrying' ? 'bg-yellow-100' : 'bg-red-100'} rounded-full p-2`}>
+                  {status === 'retrying' ? (
+                    <svg className="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  ) : (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  )}
                 </div>
               </div>
 
-              <p className="text-lg font-medium mb-2">Authentication Error</p>
-              <p className="mb-4">{errorMessage || 'An unknown error occurred.'}</p>
+              <p className="text-lg font-medium mb-2">
+                {status === 'retrying' ? 'Retrying Connection...' : 'Authentication Issue'}
+              </p>
+              
+              <p className="mb-4">{errorMessage || 'An unexpected error occurred.'}</p>
 
-              {errorCode && (
+              {errorCode && status !== 'retrying' && (
                 <p className="text-xs text-red-500 mb-4">Error code: {errorCode}</p>
               )}
 
-              <div className="flex justify-center">
-                <button
-                  onClick={() => router.push('/')}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors"
-                >
-                  Go back to Home
-                </button>
-              </div>
+              {status === 'retrying' ? (
+                <p className="text-sm">Please wait while we try to recover your session. Attempt {retryCount}/3...</p>
+              ) : (
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => router.push('/')}
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors"
+                  >
+                    Go back to Home
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

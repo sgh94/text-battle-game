@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exchangeCodeForToken, DiscordAPIError } from '@/lib/discord-api';
+import { exchangeCodeForToken, fetchDiscordUser, fetchUserGuildRoles, DiscordAPIError } from '@/lib/discord-api';
+import { determineUserLeagues, getPrimaryLeague } from '@/lib/discord-roles';
+import { saveDiscordUser, saveDiscordToken, DiscordUser } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,8 +39,58 @@ export async function POST(request: NextRequest) {
 
     // 인증 코드를 액세스 토큰으로 교환 (PKCE 코드 검증기 포함)
     const tokenData = await exchangeCodeForToken(code, codeVerifier);
-
     console.log('Token exchange successful');
+    
+    // CRITICAL: Immediately fetch and save user data to ensure database has user record
+    try {
+      // Fetch user info using the new token
+      const userData = await fetchDiscordUser(tokenData.access_token);
+      console.log(`Fetched user info for: ${userData.username} (${userData.id})`);
+      
+      // Save token to database
+      await saveDiscordToken(userData.id, tokenData);
+      console.log(`Saved token for user ${userData.id}`);
+      
+      // Fetch user's guild roles
+      let userRoles: string[] = [];
+      try {
+        userRoles = await fetchUserGuildRoles(tokenData.access_token, userData.id);
+        console.log(`Fetched ${userRoles.length} roles for user ${userData.id}`);
+      } catch (roleError) {
+        console.error('Error fetching guild roles:', roleError);
+        // Continue with empty roles array
+      }
+      
+      // Determine leagues based on roles
+      const leagues = determineUserLeagues(userRoles);
+      const primaryLeague = getPrimaryLeague(leagues);
+      
+      // Create user object for database
+      const userToSave: DiscordUser = {
+        id: userData.id,
+        username: userData.username,
+        discriminator: userData.discriminator || '0',
+        avatar: userData.avatar,
+        roles: userRoles,
+        leagues,
+        primaryLeague: primaryLeague || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Save user to database
+      const saveResult = await saveDiscordUser(userToSave);
+      if (saveResult) {
+        console.log(`Successfully saved user ${userData.id} to database`);
+      } else {
+        console.error(`Failed to save user ${userData.id} to database`);
+      }
+      
+    } catch (userError) {
+      console.error('Error fetching/saving user data during token exchange:', userError);
+      // Continue with token response even if user data saving fails
+    }
+
     return NextResponse.json(tokenData);
   } catch (error) {
     console.error('Token exchange error:', error);

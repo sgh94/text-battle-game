@@ -14,9 +14,9 @@ const CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1088729716317495
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 
 // 리다이렉트 URI - 환경에 따라 설정
-const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-  ? 'http://localhost:3000' 
-  : (process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app');
+const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? 'http://localhost:3000/auth/callback'
+  : (process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app/auth/callback');
 
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
@@ -273,7 +273,7 @@ export function getDiscordAuthUrl(code_challenge?: string): string {
   console.log('Using redirect URI:', REDIRECT_URI);
 
   const scope = 'identify guilds guilds.members.read';
-  
+
   // 기본 파라미터
   const params: Record<string, string> = {
     client_id: CLIENT_ID,
@@ -281,17 +281,17 @@ export function getDiscordAuthUrl(code_challenge?: string): string {
     response_type: 'code',
     scope: scope,
   };
-  
+
   // PKCE를 사용하는 경우 추가 파라미터
   if (code_challenge) {
     params.code_challenge = code_challenge;
     params.code_challenge_method = 'S256';
   }
-  
+
   const queryString = Object.entries(params)
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&');
-    
+
   return `https://discord.com/api/oauth2/authorize?${queryString}`;
 }
 

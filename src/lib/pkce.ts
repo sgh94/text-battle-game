@@ -7,14 +7,14 @@
 export function generateRandomString(length: number): string {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
   let text = '';
-  
+
   const randomValues = new Uint8Array(length);
   crypto.getRandomValues(randomValues);
-  
+
   for (let i = 0; i < length; i++) {
     text += possible.charAt(randomValues[i] % possible.length);
   }
-  
+
   return text;
 }
 
@@ -26,7 +26,7 @@ export async function generateCodeChallenge(codeVerifier: string): Promise<strin
   const encoder = new TextEncoder();
   const data = encoder.encode(codeVerifier);
   const digest = await crypto.subtle.digest('SHA-256', data);
-  
+
   // Convert the hash to base64-url format
   return base64UrlEncode(digest);
 }
@@ -36,8 +36,8 @@ export async function generateCodeChallenge(codeVerifier: string): Promise<strin
  */
 function base64UrlEncode(buffer: ArrayBuffer): string {
   // Convert the buffer to a base64 string
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-  
+  const base64 = btoa(Array.from(new Uint8Array(buffer)).map(byte => String.fromCharCode(byte)).join(''));
+
   // Convert base64 to base64url by replacing characters
   return base64
     .replace(/\+/g, '-')

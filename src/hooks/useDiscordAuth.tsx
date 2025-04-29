@@ -48,6 +48,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       });
 
       if (!response.ok) {
+        console.error('Failed to fetch user info:', await response.text());
         throw new Error('Failed to fetch user info');
       }
 
@@ -88,7 +89,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ refreshToken, userId: user?.id }),
       });
 
       if (!response.ok) {
@@ -116,7 +117,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     } finally {
       setIsConnecting(false);
     }
-  }, [fetchUserInfo]);
+  }, [fetchUserInfo, user?.id]);
 
   // Logout function
   const logout = useCallback(() => {
@@ -186,24 +187,32 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       }
 
       // If we have a code and the state matches, exchange it for a token
-      if (code && state && storedState && codeVerifier && state === storedState) {
-        localStorage.removeItem('discord_auth_state');
-        localStorage.removeItem('discord_code_verifier');
-
+      if (code && state && storedState && state === storedState) {
         try {
           setIsConnecting(true);
           setError(null);
 
+          // This is important for logging
+          console.log('Attempting to exchange code for token:');
+          console.log('- Code verifier:', codeVerifier ? `present (${codeVerifier.length} chars)` : 'missing');
+          console.log('- State match:', state === storedState);
+
+          // Clean up localStorage
+          localStorage.removeItem('discord_auth_state');
+          
           // Exchange code for token
           const tokenResponse = await fetch('/api/auth/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, codeVerifier }),
+            body: JSON.stringify({ 
+              code, 
+              codeVerifier 
+            }),
           });
 
           if (!tokenResponse.ok) {
-            const errorText = await tokenResponse.text();
-            throw new Error(`Token exchange failed: ${errorText}`);
+            const errorData = await tokenResponse.json().catch(() => ({ error: 'Failed to parse error response' }));
+            throw new Error(`Token exchange failed: ${errorData.error || tokenResponse.statusText}`);
           }
 
           const tokenData = await tokenResponse.json();
@@ -215,6 +224,9 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
           // Calculate when the token expires
           const expiresAt = Date.now() + tokenData.expires_in * 1000;
           localStorage.setItem('discord_expires_at', expiresAt.toString());
+
+          // Now remove the code verifier as it's no longer needed
+          localStorage.removeItem('discord_code_verifier');
 
           // Fetch user info with the new token
           await fetchUserInfo(tokenData.access_token);
@@ -256,27 +268,45 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
   // Login function
   const login = () => {
     try {
+      setIsConnecting(true);
+      setError(null);
+
       // Generate PKCE code verifier and challenge
       const codeVerifier = generateRandomString(128);
-      generateCodeChallenge(codeVerifier).then(codeChallenge => {
-        // Generate state parameter
-        const state = generateRandomString(40);
-        localStorage.setItem('discord_auth_state', state);
-        localStorage.setItem('discord_code_verifier', codeVerifier);
+      
+      // Generate state parameter
+      const state = generateRandomString(40);
+      localStorage.setItem('discord_auth_state', state);
+      localStorage.setItem('discord_code_verifier', codeVerifier);
 
+      console.log('Starting login process:');
+      console.log('- Generated code verifier:', codeVerifier ? `${codeVerifier.substring(0, 10)}... (${codeVerifier.length} chars)` : 'none');
+      console.log('- Generated state:', state ? `${state.substring(0, 10)}... (${state.length} chars)` : 'none');
+
+      // Generate the code challenge from the verifier
+      generateCodeChallenge(codeVerifier).then(codeChallenge => {
         // Construct auth URL
+        const baseUrl = 'https://discord.com/api/oauth2/authorize';
         const params = new URLSearchParams({
+          client_id: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1088729716317495367',
+          redirect_uri: typeof window !== 'undefined' && window.location.hostname === 'localhost'
+            ? 'http://localhost:3000'
+            : (process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app'),
           response_type: 'code',
-          client_id: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '',
-          scope: 'identify',
+          scope: 'identify guilds guilds.members.read',
           state,
-          redirect_uri: process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || window.location.origin,
           code_challenge: codeChallenge,
           code_challenge_method: 'S256',
-          prompt: 'consent',
         });
 
-        window.location.href = `https://discord.com/api/oauth2/authorize?${params}`;
+        const authUrl = `${baseUrl}?${params.toString()}`;
+        console.log('Redirecting to:', authUrl);
+        
+        window.location.href = authUrl;
+      }).catch(err => {
+        console.error('Error generating code challenge:', err);
+        setError('Failed to start authentication');
+        setIsConnecting(false);
       });
     } catch (err) {
       console.error('Login error:', err);
@@ -285,6 +315,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       } else {
         setError('Login initialization failed');
       }
+      setIsConnecting(false);
     }
   };
 

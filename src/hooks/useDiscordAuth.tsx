@@ -26,6 +26,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
+// 정확한 리다이렉트 URI - Discord 개발자 포털에 등록된 URI와 일치해야 함
+const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? 'http://localhost:3000/auth/callback' 
+  : 'https://character-battle-game.vercel.app/auth/callback';
+
 export function DiscordAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<DiscordUser | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -282,6 +287,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       console.log('Starting login process:');
       console.log('- Generated code verifier:', codeVerifier ? `${codeVerifier.substring(0, 10)}... (${codeVerifier.length} chars)` : 'none');
       console.log('- Generated state:', state ? `${state.substring(0, 10)}... (${state.length} chars)` : 'none');
+      console.log('- Using redirect URI:', REDIRECT_URI);
 
       // Generate the code challenge from the verifier
       generateCodeChallenge(codeVerifier).then(codeChallenge => {
@@ -289,9 +295,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
         const baseUrl = 'https://discord.com/api/oauth2/authorize';
         const params = new URLSearchParams({
           client_id: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1088729716317495367',
-          redirect_uri: typeof window !== 'undefined' && window.location.hostname === 'localhost'
-            ? 'http://localhost:3000'
-            : (process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app'),
+          redirect_uri: REDIRECT_URI,
           response_type: 'code',
           scope: 'identify guilds guilds.members.read',
           state,

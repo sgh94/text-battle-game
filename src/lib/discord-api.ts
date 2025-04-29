@@ -10,10 +10,14 @@ import {
 // Discord API 설정
 const DISCORD_API_URL = 'https://discord.com/api/v10';
 // Use a fallback client ID in case the environment variable is not set
-const CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1088729716317495367';
+const CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1088729716317495367';
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-// 리다이렉트 URI를 정확히 지정 (주의: 반드시 Discord 개발자 포털에 설정된 URI와 정확히 일치해야 함)
-const REDIRECT_URI = process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app';
+
+// 리다이렉트 URI - 환경에 따라 설정
+const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? 'http://localhost:3000' 
+  : (process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app');
+
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
 // Discord API 오류 타입
@@ -69,6 +73,7 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
     throw new Error('Discord client secret not configured');
   }
 
+  // 기본 파라미터
   const params: Record<string, string> = {
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
@@ -90,37 +95,44 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
     code_verifier: code_verifier ? '(provided)' : '(not provided)'
   });
 
-  const response = await fetch(`${DISCORD_API_URL}/oauth2/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: formBody.toString(),
-  });
+  try {
+    const response = await fetch(`${DISCORD_API_URL}/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formBody.toString(),
+    });
 
-  if (!response.ok) {
-    let errorData;
-    try {
-      errorData = await response.json();
-    } catch (e) {
-      errorData = { error: 'Failed to parse error response' };
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+        console.error('Discord API error response:', errorData);
+      } catch (e) {
+        errorData = { error: 'Failed to parse error response' };
+        console.error('Failed to parse Discord API error response');
+      }
+      throw new DiscordAPIError(
+        errorData.error || `Failed to exchange code for token: ${response.status}`,
+        response.status
+      );
     }
-    throw new DiscordAPIError(
-      errorData.error || `Failed to exchange code for token: ${response.status}`,
-      response.status
-    );
+
+    const data = await response.json();
+
+    // 만료 시간 계산
+    const expiresAt = Date.now() + data.expires_in * 1000;
+
+    return {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: expiresAt,
+    };
+  } catch (error) {
+    console.error('Token exchange error details:', error);
+    throw error;
   }
-
-  const data = await response.json();
-
-  // 만료 시간 계산
-  const expiresAt = Date.now() + data.expires_in * 1000;
-
-  return {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at: expiresAt,
-  };
 }
 
 // 토큰 갱신
@@ -251,16 +263,36 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
 }
 
 // OAuth2 인증 URL 생성
-export function getDiscordAuthUrl(): string {
+export function getDiscordAuthUrl(code_challenge?: string): string {
   if (!CLIENT_ID) {
     console.error('Discord client ID not configured');
     throw new Error('Discord client ID not configured');
   }
 
   console.log('Using Discord Client ID:', CLIENT_ID);
+  console.log('Using redirect URI:', REDIRECT_URI);
 
   const scope = 'identify guilds guilds.members.read';
-  return `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(scope)}`;
+  
+  // 기본 파라미터
+  const params: Record<string, string> = {
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    response_type: 'code',
+    scope: scope,
+  };
+  
+  // PKCE를 사용하는 경우 추가 파라미터
+  if (code_challenge) {
+    params.code_challenge = code_challenge;
+    params.code_challenge_method = 'S256';
+  }
+  
+  const queryString = Object.entries(params)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+    
+  return `https://discord.com/api/oauth2/authorize?${queryString}`;
 }
 
 // Discord 사용자 토큰 취소 (로그아웃 시)

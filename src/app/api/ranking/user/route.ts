@@ -15,91 +15,91 @@ export async function GET(request: NextRequest) {
 
     console.log(`Fetching user ranking for userId: ${userId} in league: ${league}`);
 
-    // Get the user's characters
-    const characterIds = await kv.smembers(`user:${userId}:characters`);
-
-    if (!characterIds || characterIds.length === 0) {
-      console.log(`No characters found for user: ${userId}`);
-      return NextResponse.json({ ranking: null });
-    }
-
-    console.log(`Found ${characterIds.length} characters for user: ${userId}`);
-
-    // Get all characters for this user
-    const characters: Character[] = [];
-    for (const id of characterIds) {
-      const character = await kv.hgetall<Character>(`character:${id}`);
-      
-      // Character must be in the correct league unless it's the general league
-      if (character) {
-        // If league is general, include all characters
-        // Otherwise, only include characters that match the requested league
-        if (league === 'general' || character.league === league) {
-          characters.push(character);
-          console.log(`Including character: ${character.name} (ID: ${character.id}) in league: ${character.league}`);
-        } else {
-          console.log(`Skipping character: ${character.name} (ID: ${character.id}) in league: ${character.league}, requested: ${league}`);
-        }
-      }
-    }
-
-    if (characters.length === 0) {
-      console.log(`No characters in league: ${league} for user: ${userId}`);
-      return NextResponse.json({ ranking: null });
-    }
-
-    // Find the highest ranking character for this user in the specified league
-    let highestRankedCharacter: Character | null = null;
-    let highestRank = Infinity;
-    let highestElo = -1;
-
-    // Get the ranking for the specified league
+    // 1. 해당 리그의 랭킹 키 확인
     const rankingKey = `league:${league}:ranking`;
     const exists = await kv.exists(rankingKey);
-
     if (!exists) {
       console.log(`Ranking key ${rankingKey} does not exist`);
       return NextResponse.json({ ranking: null });
     }
 
-    // For each character, find its rank in the specified league
-    for (const character of characters) {
-      // Get the character's rank in the league
-      const rank = await kv.zrevrank(rankingKey, character.id);
-
-      if (rank === null) {
-        console.log(`Character ${character.id} (${character.name}) not found in ranking for league: ${league}`);
-        continue;
-      }
-
-      // Get the character's score (ELO)
-      const elo = await kv.zscore(rankingKey, character.id);
-      
-      console.log(`Character ${character.name} (ID: ${character.id}) has rank: ${rank + 1}, elo: ${elo}`);
-      
-      // Check if this is the highest ranked character for this user
-      if (highestRankedCharacter === null || rank < highestRank) {
-        highestRankedCharacter = character;
-        highestRank = rank;
-        highestElo = elo || 0;
-      }
-    }
-
-    if (!highestRankedCharacter) {
-      console.log(`No ranked character found for user: ${userId} in league: ${league}`);
+    // 2. 사용자의 캐릭터 ID 목록 가져오기
+    const characterIds = await kv.smembers(`user:${userId}:characters`);
+    if (!characterIds || characterIds.length === 0) {
+      console.log(`No characters found for user: ${userId}`);
       return NextResponse.json({ ranking: null });
     }
 
-    // Return the user's ranking
-    const userRanking: UserRanking = {
-      characterId: highestRankedCharacter.id,
-      characterName: highestRankedCharacter.name,
-      rank: highestRank + 1, // Convert from 0-based to 1-based rank
-      elo: highestElo
-    };
+    console.log(`User ${userId} has ${characterIds.length} characters`);
 
-    console.log(`User ranking for ${userId} in league ${league}:`, userRanking);
-    return NextResponse.json({ ranking: userRanking });
+    // 3. 리그별 캐릭터만 필터링
+    let validCharacterIds = characterIds;
+
+    // 특정 리그인 경우 해당 리그 캐릭터만 필터링
+    if (league !== 'general') {
+      const characterPromises = characterIds.map(id => 
+        kv.hgetall<Character>(`character:${id}`)
+      );
+      
+      const characters = await Promise.all(characterPromises);
+      
+      validCharacterIds = characterIds.filter((id, index) => {
+        const character = characters[index];
+        return character && character.league === league;
+      });
+      
+      console.log(`User ${userId} has ${validCharacterIds.length} characters in ${league} league`);
+      
+      if (validCharacterIds.length === 0) {
+        return NextResponse.json({ ranking: null });
+      }
+    }
+
+    // 4. 각 캐릭터의 랭킹 정보 가져오기
+    let bestRank = Infinity;
+    let bestCharacterId = null;
+    let bestElo = -1;
+    let bestCharacterName = '';
+
+    // 각 캐릭터의 랭킹 조회
+    for (const id of validCharacterIds) {
+      // 캐릭터의 랭킹 위치 조회 (0부터 시작)
+      const rank = await kv.zrevrank(rankingKey, id);
+      
+      if (rank === null) continue; // 랭킹에 없는 캐릭터
+      
+      // 캐릭터의 ELO 점수 조회
+      const elo = await kv.zscore(rankingKey, id);
+      
+      // 캐릭터 정보 가져오기
+      const character = await kv.hgetall<Character>(`character:${id}`);
+      
+      if (!character) continue;
+      
+      console.log(`Character ${id} (${character.name}) has rank #${rank + 1} with elo ${elo}`);
+      
+      // 더 높은 랭킹(낮은 숫자)이면 업데이트
+      if (rank < bestRank) {
+        bestRank = rank;
+        bestCharacterId = id;
+        bestElo = elo || 0;
+        bestCharacterName = character.name || '';
+      }
+    }
+
+    // 5. 최고 랭킹 캐릭터 결과 반환
+    if (bestCharacterId) {
+      const userRanking = {
+        characterId: bestCharacterId,
+        characterName: bestCharacterName,
+        rank: bestRank + 1, // 0-based에서 1-based로 변환
+        elo: bestElo
+      };
+      
+      return NextResponse.json({ ranking: userRanking });
+    }
+
+    return NextResponse.json({ ranking: null });
   } catch (error) {
     console.error('Error fetching user ranking:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

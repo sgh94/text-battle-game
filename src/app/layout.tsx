@@ -1,6 +1,6 @@
 // src/app/layout.tsx
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 
@@ -13,7 +13,13 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Text Battle Game',
   description: 'A Discord-based text battle game with LLM decision making',
-  viewport: 'width=device-width, initial-scale=1',
+};
+
+// Viewport 설정을 별도로 분리 (Next.js 14 이상에서 권장)
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 // Set default runtime for entire app (not edge)

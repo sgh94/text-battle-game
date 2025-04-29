@@ -69,34 +69,8 @@ export function RankingList() {
         const data = await response.json();
         console.log(`Rankings for ${leagueId}:`, data.rankings);
         
-        // Make sure we have an array of rankings
-        if (Array.isArray(data.rankings)) {
-          // Verify that each character belongs to the correct league
-          const validRankings = data.rankings.filter((char: Character) => {
-            // For general league, accept all
-            if (leagueId === 'general') return true;
-            
-            // For specific leagues, verify the league matches
-            const leagueMatches = char.league === leagueId;
-            if (!leagueMatches) {
-              console.warn(`Filtering out character ${char.id} (${char.name}) with league ${char.league} from ${leagueId} rankings`);
-            }
-            return leagueMatches;
-          });
-          
-          // Log how many characters were filtered out
-          if (validRankings.length !== data.rankings.length) {
-            const filtered = data.rankings.length - validRankings.length;
-            setDebugInfo(`필터링됨: ${filtered}개 케릭터 (잘못된 리그 소속)`);
-          }
-          
-          // Update rankings with only valid entries
-          setRankings(validRankings);
-        } else {
-          console.error('Invalid rankings data:', data);
-          setRankings([]);
-          setFetchError('Invalid rankings data returned from server');
-        }
+        // Set rankings directly - server already filters by league correctly
+        setRankings(data.rankings || []);
         
         // If user is logged in, fetch their ranking
         if (userId) {
@@ -254,11 +228,6 @@ export function RankingList() {
                       <Link href={`/character/${character.id}`} className="text-purple-400 hover:text-purple-300">
                         {character.name}
                       </Link>
-                      {character.league && selectedLeague === 'general' && (
-                        <span className="ml-2 text-xs text-gray-500">
-                          ({character.league})
-                        </span>
-                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-400">{formatAddress(character.owner)}</td>
                     <td className="px-4 py-3 text-right font-bold">{character.elo}</td>

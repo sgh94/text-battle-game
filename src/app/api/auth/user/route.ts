@@ -1,6 +1,10 @@
+'use server';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchDiscordUser, fetchUserGuildRoles, DiscordAPIError } from '@/lib/discord-api';
 import { determineUserLeagues, getPrimaryLeague } from '@/lib/discord-roles';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {

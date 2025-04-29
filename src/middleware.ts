@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import crypto from 'crypto';
 
 export function middleware(request: NextRequest) {
+  // Generate a random nonce for CSP
+  const nonce = crypto.randomBytes(16).toString('base64');
+  
   // Get response
   const response = NextResponse.next();
+  
+  // Add the nonce to the response
+  response.headers.set('x-nonce', nonce);
 
   // Define Content Security Policy
   // Allows Discord and other necessary services
   const cspHeader = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.discordapp.com https://cdnjs.cloudflare.com",
-    "style-src 'self' 'unsafe-inline' https://cdn.discordapp.com https://cdnjs.cloudflare.com",
+    `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://cdn.discordapp.com https://cdnjs.cloudflare.com`,
+    `style-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://cdn.discordapp.com https://cdnjs.cloudflare.com`,
     "img-src 'self' https: data: blob:",
     "font-src 'self' data: https://cdn.discordapp.com https://cdnjs.cloudflare.com",
     "connect-src 'self' https://discord.com https://*.discord.com https://api.openai.com",

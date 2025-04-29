@@ -1,3 +1,5 @@
+'use server';
+
 import { NextRequest, NextResponse } from 'next/server';
 import {
   exchangeCodeForToken,
@@ -8,9 +10,11 @@ import {
 import { DiscordUser, saveDiscordToken, saveDiscordUser } from '@/lib/db';
 import { determineUserLeagues, getPrimaryLeague } from '@/lib/discord-roles';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
-    const { code } = await request.json();
+    const { code, codeVerifier } = await request.json();
 
     if (!code) {
       return NextResponse.json(
@@ -30,18 +34,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. 코드를 액세스 토큰으로 교환
-    const tokenData = await exchangeCodeForToken(code);
+    console.log('Processing Discord authentication with code:', code.substring(0, 10) + '...');
+    console.log('Code verifier:', codeVerifier ? `present (${codeVerifier.length} chars)` : 'not provided');
+
+    // 1. 코드를 액세스 토큰으로 교환 (PKCE 코드 검증기 포함)
+    const tokenData = await exchangeCodeForToken(code, codeVerifier);
+    console.log('Token exchange successful');
 
     // 2. Discord 사용자 정보 가져오기
     const userData = await fetchDiscordUser(tokenData.access_token);
+    console.log('User info retrieved for:', userData.username);
 
     // 3. 사용자의 길드 역할 가져오기
     const userRoles = await fetchUserGuildRoles(tokenData.access_token, userData.id);
+    console.log('User has', userRoles.length, 'roles');
 
     // 4. 역할 기반으로 리그 결정
     const leagues = determineUserLeagues(userRoles);
     const primaryLeague = getPrimaryLeague(leagues);
+    console.log('User leagues:', leagues);
+    console.log('Primary league:', primaryLeague);
 
     // 5. 토큰 정보 저장 (데이터베이스)
     await saveDiscordToken(userData.id, tokenData);
@@ -50,7 +62,7 @@ export async function POST(request: NextRequest) {
     const userProfile = {
       id: userData.id,
       username: userData.username,
-      discriminator: userData.discriminator,
+      discriminator: userData.discriminator || '0',
       avatar: userData.avatar,
       roles: userRoles,
       leagues,
@@ -60,12 +72,13 @@ export async function POST(request: NextRequest) {
     };
 
     await saveDiscordUser(userProfile as DiscordUser);
+    console.log('User data saved successfully');
 
     // 7. 클라이언트에게 응답 (민감한 토큰 정보 제외)
     const responseData = {
       id: userData.id,
       username: userData.username,
-      discriminator: userData.discriminator,
+      discriminator: userData.discriminator || '0',
       avatar: userData.avatar,
       roles: userRoles,
       leagues,

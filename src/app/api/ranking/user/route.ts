@@ -23,83 +23,91 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ranking: null });
     }
 
-    // 2. 사용자의 캐릭터 ID 목록 가져오기
-    const characterIds = await kv.smembers(`user:${userId}:characters`);
-    if (!characterIds || characterIds.length === 0) {
+    // 2. 리그 전용 캐릭터 ID 세트 가져오기
+    const leagueCharactersKey = `league:${league}:characters`;
+    const leagueExists = await kv.exists(leagueCharactersKey);
+    
+    // 3. 사용자의 캐릭터 ID 목록 가져오기
+    const userCharacters = await kv.smembers(`user:${userId}:characters`);
+    if (!userCharacters || userCharacters.length === 0) {
       console.log(`No characters found for user: ${userId}`);
       return NextResponse.json({ ranking: null });
     }
 
-    console.log(`User ${userId} has ${characterIds.length} characters`);
-
-    // 3. 리그별 캐릭터만 필터링
-    let validCharacterIds = characterIds;
-
-    // 특정 리그인 경우 해당 리그 캐릭터만 필터링
-    if (league !== 'general') {
-      const characterPromises = characterIds.map(id => 
+    // 4. 리그에 속한 사용자 캐릭터 필터링 (효율적인 집합 연산 사용)
+    let validCharacterIds;
+    
+    if (leagueExists) {
+      // 리그 세트가 있으면 교집합 연산으로 빠르게 필터링
+      validCharacterIds = await kv.sinter(`user:${userId}:characters`, leagueCharactersKey);
+    } else if (league === 'general') {
+      // general 리그는 모든 캐릭터 포함
+      validCharacterIds = userCharacters;
+    } else {
+      // 리그 세트가 없으면 각 캐릭터를 개별 확인
+      const characterPromises = userCharacters.map(id => 
         kv.hgetall<Character>(`character:${id}`)
       );
       
       const characters = await Promise.all(characterPromises);
       
-      validCharacterIds = characterIds.filter((id, index) => {
+      // 해당 리그 캐릭터만 필터링
+      validCharacterIds = userCharacters.filter((id, index) => {
         const character = characters[index];
-        return character && character.league === league;
+        return character && (league === 'general' || character.league === league);
       });
-      
-      console.log(`User ${userId} has ${validCharacterIds.length} characters in ${league} league`);
-      
-      if (validCharacterIds.length === 0) {
-        return NextResponse.json({ ranking: null });
-      }
     }
 
-    // 4. 각 캐릭터의 랭킹 정보 가져오기
+    console.log(`User ${userId} has ${validCharacterIds.length} characters in ${league} league`);
+    
+    if (validCharacterIds.length === 0) {
+      return NextResponse.json({ ranking: null });
+    }
+
+    // 5. 여러 캐릭터의 랭킹 일괄 조회 (Pipeline 사용)
     let bestRank = Infinity;
     let bestCharacterId = null;
     let bestElo = -1;
     let bestCharacterName = '';
 
-    // 각 캐릭터의 랭킹 조회
-    for (const id of validCharacterIds) {
-      // 캐릭터의 랭킹 위치 조회 (0부터 시작)
-      const rank = await kv.zrevrank(rankingKey, id);
-      
-      if (rank === null) continue; // 랭킹에 없는 캐릭터
-      
-      // 캐릭터의 ELO 점수 조회
-      const elo = await kv.zscore(rankingKey, id);
-      
-      // 캐릭터 정보 가져오기
-      const character = await kv.hgetall<Character>(`character:${id}`);
-      
-      if (!character) continue;
-      
-      console.log(`Character ${id} (${character.name}) has rank #${rank + 1} with elo ${elo}`);
-      
-      // 더 높은 랭킹(낮은 숫자)이면 업데이트
-      if (rank < bestRank) {
-        bestRank = rank;
-        bestCharacterId = id;
-        bestElo = elo || 0;
-        bestCharacterName = character.name || '';
-      }
-    }
+    // 각 캐릭터의 랭킹 점수를 모두 가져옴
+    const rankScores = await Promise.all(
+      validCharacterIds.map(async (id) => {
+        const rank = await kv.zrevrank(rankingKey, id);
+        const score = await kv.zscore(rankingKey, id);
+        
+        if (rank === null) return null;
+        
+        return { id, rank, score };
+      })
+    );
 
-    // 5. 최고 랭킹 캐릭터 결과 반환
-    if (bestCharacterId) {
-      const userRanking = {
-        characterId: bestCharacterId,
-        characterName: bestCharacterName,
-        rank: bestRank + 1, // 0-based에서 1-based로 변환
-        elo: bestElo
-      };
-      
-      return NextResponse.json({ ranking: userRanking });
+    // 유효한 결과만 필터링하고 랭킹별 정렬
+    const validRanks = rankScores
+      .filter(Boolean)
+      .sort((a, b) => a.rank - b.rank);
+    
+    if (validRanks.length === 0) {
+      return NextResponse.json({ ranking: null });
     }
-
-    return NextResponse.json({ ranking: null });
+    
+    // 최고 랭킹 캐릭터 정보 가져오기
+    const bestCharacter = validRanks[0];
+    const characterInfo = await kv.hgetall<Character>(`character:${bestCharacter.id}`);
+    
+    if (!characterInfo) {
+      return NextResponse.json({ ranking: null });
+    }
+    
+    // 결과 반환
+    const userRanking = {
+      characterId: bestCharacter.id,
+      characterName: characterInfo.name,
+      rank: bestCharacter.rank + 1, // 0-based에서 1-based로 변환
+      elo: bestCharacter.score
+    };
+      
+    return NextResponse.json({ ranking: userRanking });
   } catch (error) {
     console.error('Error fetching user ranking:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

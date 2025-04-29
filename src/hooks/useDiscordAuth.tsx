@@ -32,6 +32,11 @@ const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname =
   ? 'http://localhost:3000/auth/callback' 
   : 'https://character-battle-game.vercel.app/auth/callback';
 
+// Create exponential backoff mechanism
+const createBackoffDelay = (retryCount: number, baseDelay = 1000, maxDelay = 10000) => {
+  return Math.min(baseDelay * Math.pow(1.5, retryCount), maxDelay);
+};
+
 export function DiscordAuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<DiscordUser | null>(null);
@@ -63,6 +68,15 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
           console.log('Rate limited, waiting to retry...');
           const retryAfter = response.headers.get('Retry-After') || '2';
           const delay = parseInt(retryAfter, 10) * 1000 || 2000;
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return fetchUserInfo(accessToken, retries + 1);
+        }
+        
+        // If we get server errors (5xx), also retry 
+        if (response.status >= 500 && response.status < 600 && retries < 3) {
+          console.log(`Server error (${response.status}), waiting to retry...`);
+          const delay = createBackoffDelay(retries);
           
           await new Promise(resolve => setTimeout(resolve, delay));
           return fetchUserInfo(accessToken, retries + 1);
@@ -105,7 +119,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       // Only retry for network errors, not for logical errors
       if (retries < 3 && (err instanceof TypeError || (err as any)?.code === 'FETCH_ROLES_FAILED')) {
         console.log('Retrying user info fetch after error...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, createBackoffDelay(retries)));
         return fetchUserInfo(accessToken, retries + 1);
       }
       
@@ -216,7 +230,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       } else if (retryCount >= 3 || user) {
         clearInterval(retryTimer);
       }
-    }, 2000); // Retry every 2 seconds
+    }, createBackoffDelay(retryCount)); // Use exponential backoff for retries
 
     return () => clearInterval(retryTimer);
   }, [fetchUserInfo, refreshAccessToken, logout, isInitialized, user, retryCount]);
@@ -264,6 +278,19 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
           });
 
           if (!tokenResponse.ok) {
+            // For rate limiting, implement a retry logic
+            if (tokenResponse.status === 429) {
+              const retryAfter = tokenResponse.headers.get('Retry-After') || '2';
+              const delay = parseInt(retryAfter, 10) * 1000 || 2000;
+              
+              setError(`Rate limited by Discord. Retrying automatically in ${Math.ceil(delay/1000)} seconds...`);
+              
+              // Wait and retry
+              await new Promise(resolve => setTimeout(resolve, delay));
+              handleCallback();
+              return;
+            }
+            
             const errorData = await tokenResponse.json().catch(() => ({ error: 'Failed to parse error response' }));
             throw new Error(`Token exchange failed: ${errorData.error || tokenResponse.statusText}`);
           }
@@ -323,7 +350,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  // Login function
+  // Login function with improved error handling
   const login = () => {
     try {
       setIsConnecting(true);
@@ -354,6 +381,8 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
           state,
           code_challenge: codeChallenge,
           code_challenge_method: 'S256',
+          // Add prompt parameter to ensure Discord shows the authorization screen
+          prompt: 'consent',
         });
 
         const authUrl = `${baseUrl}?${params.toString()}`;

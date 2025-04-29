@@ -34,6 +34,7 @@ export function RankingList() {
   
   // 디버그용 상태 추가
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   useEffect(() => {
     // Set user's available leagues if they're logged in
@@ -55,48 +56,68 @@ export function RankingList() {
     try {
       setIsLoading(true);
       setFetchError(null);
+      setDebugInfo(null);
       const userId = user?.id;
       
       console.log(`Fetching rankings for league: ${leagueId}`);
       
-      // Fetch top 10 rankings for the selected league
-      const response = await fetch(`/api/ranking?league=${leagueId}&limit=10`);
+      // Fetch rankings for the selected league with a cache-busting parameter
+      const timestamp = Date.now();
+      const response = await fetch(`/api/ranking?league=${leagueId}&limit=10&t=${timestamp}`);
       
       if (response.ok) {
         const data = await response.json();
         console.log(`Rankings for ${leagueId}:`, data.rankings);
         
-        // Filter out characters that don't belong to the selected league
-        // Except for 'general' league which shows all
-        let filteredRankings = data.rankings || [];
-        
-        if (leagueId !== 'general') {
-          filteredRankings = filteredRankings.filter((char: Character) => 
-            char.league === leagueId || !char.league
-          );
+        // Make sure we have an array of rankings
+        if (Array.isArray(data.rankings)) {
+          // Verify that each character belongs to the correct league
+          const validRankings = data.rankings.filter((char: Character) => {
+            // For general league, accept all
+            if (leagueId === 'general') return true;
+            
+            // For specific leagues, verify the league matches
+            const leagueMatches = char.league === leagueId;
+            if (!leagueMatches) {
+              console.warn(`Filtering out character ${char.id} (${char.name}) with league ${char.league} from ${leagueId} rankings`);
+            }
+            return leagueMatches;
+          });
           
-          console.log(`Filtered rankings for ${leagueId}:`, 
-            filteredRankings.map((r: Character) => ({ id: r.id, name: r.name, league: r.league }))
-          );
+          // Log how many characters were filtered out
+          if (validRankings.length !== data.rankings.length) {
+            const filtered = data.rankings.length - validRankings.length;
+            setDebugInfo(`필터링됨: ${filtered}개 케릭터 (잘못된 리그 소속)`);
+          }
+          
+          // Update rankings with only valid entries
+          setRankings(validRankings);
+        } else {
+          console.error('Invalid rankings data:', data);
+          setRankings([]);
+          setFetchError('Invalid rankings data returned from server');
         }
-        
-        setRankings(filteredRankings);
         
         // If user is logged in, fetch their ranking
         if (userId) {
-          const userRankingResponse = await fetch(`/api/ranking/user?userId=${userId}&league=${leagueId}`);
-          if (userRankingResponse.ok) {
-            const userRankingData = await userRankingResponse.json();
-            if (userRankingData.ranking) {
-              console.log(`User ranking for ${leagueId}:`, userRankingData.ranking);
-              setUserRanking(userRankingData.ranking);
+          try {
+            const userRankingResponse = await fetch(`/api/ranking/user?userId=${userId}&league=${leagueId}&t=${timestamp}`);
+            if (userRankingResponse.ok) {
+              const userRankingData = await userRankingResponse.json();
+              if (userRankingData.ranking) {
+                console.log(`User ranking for ${leagueId}:`, userRankingData.ranking);
+                setUserRanking(userRankingData.ranking);
+              } else {
+                setUserRanking(null);
+              }
             } else {
+              console.error(`Failed to fetch user ranking:`, 
+                await userRankingResponse.text().catch(() => 'Unknown error')
+              );
               setUserRanking(null);
             }
-          } else {
-            console.error(`Failed to fetch user ranking:`, 
-              await userRankingResponse.text().catch(() => 'Unknown error')
-            );
+          } catch (userRankingError) {
+            console.error('Error fetching user ranking:', userRankingError);
             setUserRanking(null);
           }
         }
@@ -105,10 +126,12 @@ export function RankingList() {
           await response.text().catch(() => 'Unknown error')
         );
         setFetchError(`Failed to fetch rankings for league: ${leagueId}`);
+        setRankings([]);
       }
     } catch (error) {
       console.error('Error fetching rankings:', error);
       setFetchError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setRankings([]);
     } finally {
       setIsLoading(false);
     }
@@ -173,6 +196,12 @@ export function RankingList() {
           <p className="text-sm">{fetchError}</p>
         </div>
       )}
+      
+      {debugInfo && (
+        <div className="bg-blue-900/30 border border-blue-700 text-blue-200 px-4 py-3 rounded-md mb-4">
+          <p className="text-sm">{debugInfo}</p>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center my-8">
@@ -184,7 +213,7 @@ export function RankingList() {
       ) : rankings.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
           <p>No rankings available for {getLeagueInfo(selectedLeague).name}</p>
-          {user && user.leagues.includes(selectedLeague) && (
+          {user && user.leagues && user.leagues.includes(selectedLeague) && (
             <p className="mt-2 text-gray-400">
               Create a hero in this league to be the first on the leaderboard!
             </p>
@@ -213,28 +242,30 @@ export function RankingList() {
                 </tr>
               </thead>
               <tbody>
-                {rankings.map((character) => (
+                {rankings.map((character, index) => (
                   <tr 
                     key={character.id} 
                     className={`border-t border-gray-700 hover:bg-gray-700 transition ${
                       userRanking?.characterId === character.id ? 'bg-purple-900 bg-opacity-30' : ''
                     }`}
                   >
-                    <td className="px-4 py-3">{character.rank}</td>
+                    <td className="px-4 py-3">{index + 1}</td>
                     <td className="px-4 py-3">
                       <Link href={`/character/${character.id}`} className="text-purple-400 hover:text-purple-300">
                         {character.name}
                       </Link>
-                      <span className="ml-2 text-xs text-gray-500">
-                        ({character.league || 'general'})
-                      </span>
+                      {character.league && selectedLeague === 'general' && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          ({character.league})
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-400">{formatAddress(character.owner)}</td>
                     <td className="px-4 py-3 text-right font-bold">{character.elo}</td>
                     <td className="px-4 py-3 text-right text-sm">
-                      <span className="text-green-500">{character.wins}</span>/
-                      <span className="text-red-500">{character.losses}</span>/
-                      <span className="text-gray-400">{character.draws}</span>
+                      <span className="text-green-500">{character.wins || 0}</span>/
+                      <span className="text-red-500">{character.losses || 0}</span>/
+                      <span className="text-gray-400">{character.draws || 0}</span>
                     </td>
                   </tr>
                 ))}
@@ -277,6 +308,18 @@ export function RankingList() {
           <span className="font-medium">Eligibility:</span> {getLeagueInfo(selectedLeague).eligibility}
         </p>
       </div>
+      
+      {/* 개발 모드에서만 표시되는 디버그 버튼 */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-2 text-right">
+          <button 
+            onClick={() => fetchRankings(selectedLeague)} 
+            className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded-md"
+          >
+            새로고침
+          </button>
+        </div>
+      )}
     </div>
   );
 }

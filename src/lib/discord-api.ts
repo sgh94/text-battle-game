@@ -19,16 +19,37 @@ const REDIRECT_URI = process.env.NODE_ENV === 'development'
 
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
+// 전역 요청 제한 관리를 위한 간단한 캐시
+const rateLimitCache = {
+  lastRequestTime: 0,
+  minDelay: 250, // 최소 250ms 간격으로 요청 (Discord 권장)
+  
+  // 요청 간 딜레이 보장
+  async enforceDelay() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.minDelay) {
+      const waitTime = this.minDelay - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.lastRequestTime = Date.now();
+  }
+};
+
 // Discord API 오류 타입
 export class DiscordAPIError extends Error {
   status: number;
   code: string;
+  retryAfter?: number;
 
-  constructor(message: string, status: number, code: string = 'DISCORD_API_ERROR') {
+  constructor(message: string, status: number, code: string = 'DISCORD_API_ERROR', retryAfter?: number) {
     super(message);
     this.name = 'DiscordAPIError';
     this.status = status;
     this.code = code;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -60,6 +81,47 @@ export interface DiscordGuildMember {
   mute: boolean;
   pending?: boolean;
   permissions?: string;
+}
+
+// 재시도 로직을 포함한 API 요청 헬퍼
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  let retries = 0;
+  
+  while (retries < maxRetries) {
+    try {
+      // 요청 간 딜레이 적용
+      await rateLimitCache.enforceDelay();
+      
+      const response = await fetch(url, options);
+      
+      // 429 (요청 제한) 대응
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '1', 10);
+        const waitTime = retryAfter * 1000 || 1000;
+        console.log(`Rate limited by Discord API. Waiting ${waitTime}ms before retry...`);
+        
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        retries++;
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      // 네트워크 오류 등에 대한 재시도
+      console.error(`API call failed (attempt ${retries + 1}/${maxRetries}):`, error);
+      
+      if (retries === maxRetries - 1) {
+        throw error;
+      }
+      
+      // 지수 백오프 적용 (각 재시도마다 대기 시간 증가)
+      const waitTime = Math.pow(2, retries) * 1000;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      retries++;
+    }
+  }
+  
+  throw new Error(`Failed after ${maxRetries} retries`);
 }
 
 // 인증 코드를 토큰으로 교환
@@ -95,7 +157,7 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
   });
 
   try {
-    const response = await fetch(`${DISCORD_API_URL}/oauth2/token`, {
+    const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -112,9 +174,15 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
         errorData = { error: 'Failed to parse error response' };
         console.error('Failed to parse Discord API error response');
       }
+      
+      // 재시도 정보 추출
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+      
       throw new DiscordAPIError(
         errorData.error || `Failed to exchange code for token: ${response.status}`,
-        response.status
+        response.status,
+        'TOKEN_EXCHANGE_FAILED',
+        retryAfter
       );
     }
 
@@ -147,7 +215,7 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
     refresh_token: refreshToken,
   });
 
-  const response = await fetch(`${DISCORD_API_URL}/oauth2/token`, {
+  const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -210,7 +278,7 @@ export async function getValidAccessToken(userId: string): Promise<string> {
 
 // Discord 사용자 정보 가져오기
 export async function fetchDiscordUser(accessToken: string): Promise<DiscordUserData> {
-  const response = await fetch(`${DISCORD_API_URL}/users/@me`, {
+  const response = await fetchWithRetry(`${DISCORD_API_URL}/users/@me`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
@@ -234,13 +302,15 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
     throw new DiscordAPIError('Guild ID not configured', 500, 'GUILD_ID_MISSING');
   }
 
-  const response = await fetch(
+  // 여러 번 재시도해볼 수 있도록 최대 재시도 횟수 증가
+  const response = await fetchWithRetry(
     `${DISCORD_API_URL}/users/@me/guilds/${GUILD_ID}/member`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
-    }
+    },
+    5 // 최대 5번 재시도
   );
 
   if (!response.ok) {
@@ -250,10 +320,13 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
     }
 
     const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+    const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+    
     throw new DiscordAPIError(
       data.error || `Failed to fetch guild roles: ${response.status}`,
       response.status,
-      'FETCH_ROLES_FAILED'
+      'FETCH_ROLES_FAILED',
+      retryAfter
     );
   }
 
@@ -306,7 +379,7 @@ export async function revokeToken(token: string): Promise<boolean> {
     token,
   });
 
-  const response = await fetch(`${DISCORD_API_URL}/oauth2/token/revoke`, {
+  const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token/revoke`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',

@@ -97,9 +97,9 @@ export function CreateCharacterModal({
       setIsSubmitting(true);
       setError('');
 
-      // Get auth token from local storage
-      const authData = localStorage.getItem('text-battle-discord-auth');
-      if (!authData) {
+      // Check for valid auth token
+      const accessToken = localStorage.getItem('discord_access_token');
+      if (!accessToken) {
         throw new Error('You are not authenticated. Please log in again.');
       }
 

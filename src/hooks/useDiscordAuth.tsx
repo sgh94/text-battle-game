@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { generateRandomString, generateCodeChallenge } from '@/lib/pkce';
 import { determineUserLeagues, getPrimaryLeague, generateRoleDescription } from '@/lib/discord-roles';
 
@@ -30,43 +30,147 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
   const [user, setUser] = useState<DiscordUser | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [, setIsClient] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Helper function to check if token is expired
   const isTokenExpired = (expiresAt: number) => {
     return Date.now() >= expiresAt;
   };
 
+  // Fetch user info from Discord API
+  const fetchUserInfo = useCallback(async (accessToken: string) => {
+    try {
+      const response = await fetch('/api/auth/user', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user info');
+      }
+
+      const userData = await response.json();
+
+      // Make sure roles is always an array
+      const roles = Array.isArray(userData.roles) ? userData.roles : [];
+      
+      // Determine available leagues based on roles
+      const userLeagues = determineUserLeagues(roles);
+      const primaryLeague = getPrimaryLeague(userLeagues);
+
+      const userInfo = {
+        id: userData.id || '',
+        username: userData.username || '',
+        avatar: userData.avatar || null,
+        roles: roles,
+        leagues: userLeagues,
+        primaryLeague,
+        roleDescription: generateRoleDescription(roles),
+      };
+
+      setUser(userInfo);
+
+      // If this is a new connection, log it for debugging
+      console.log('Discord user connected:', userData.username);
+      return userInfo;
+    } catch (err) {
+      console.error('Error fetching user info:', err);
+      throw err;
+    }
+  }, []);
+
+  // Function to refresh access token using refresh token
+  const refreshAccessToken = useCallback(async (refreshToken: string) => {
+    try {
+      setIsConnecting(true);
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Token refresh failed: ${errorText}`);
+      }
+
+      const tokenData = await response.json();
+
+      // Save new tokens
+      localStorage.setItem('discord_access_token', tokenData.access_token);
+      localStorage.setItem('discord_refresh_token', tokenData.refresh_token);
+
+      // Calculate when the token expires
+      const expiresAt = Date.now() + tokenData.expires_in * 1000;
+      localStorage.setItem('discord_expires_at', expiresAt.toString());
+
+      // Fetch user info with the new token
+      return await fetchUserInfo(tokenData.access_token);
+    } catch (err) {
+      console.error('Token refresh error:', err);
+      // If refresh fails, log out the user
+      logout();
+      throw err;
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [fetchUserInfo]);
+
+  // Logout function
+  const logout = useCallback(() => {
+    localStorage.removeItem('discord_access_token');
+    localStorage.removeItem('discord_refresh_token');
+    localStorage.removeItem('discord_expires_at');
+    localStorage.removeItem('discord_auth_state');
+    localStorage.removeItem('discord_code_verifier');
+    setUser(null);
+  }, []);
+
   // Check for existing session on mount
   useEffect(() => {
-    setIsClient(true);
     const checkAuth = async () => {
       try {
+        setIsConnecting(true);
+        
         // Check if there's a token in localStorage and if it's not expired
         const accessToken = localStorage.getItem('discord_access_token');
         const expiresAt = Number(localStorage.getItem('discord_expires_at') || '0');
         const refreshToken = localStorage.getItem('discord_refresh_token');
 
-        if (!accessToken) return;
+        if (!accessToken) {
+          setIsInitialized(true);
+          return;
+        }
 
         // If token is expired, try to refresh it
         if (isTokenExpired(expiresAt) && refreshToken) {
           await refreshAccessToken(refreshToken);
+          setIsInitialized(true);
           return;
         }
 
         // If we have a valid token, fetch the user info
         await fetchUserInfo(accessToken);
+        setIsInitialized(true);
       } catch (err) {
         console.error('Auth check error:', err);
         // Clear tokens if they're invalid
         logout();
+        setIsInitialized(true);
+      } finally {
+        setIsConnecting(false);
       }
     };
 
     checkAuth();
+  }, [fetchUserInfo, refreshAccessToken, logout]);
 
-    // Handle Discord OAuth callback
+  // Handle Discord OAuth callback
+  useEffect(() => {
+    if (!isInitialized) return;
+
     const handleCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
@@ -114,7 +218,6 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
           // Fetch user info with the new token
           await fetchUserInfo(tokenData.access_token);
-
         } catch (err) {
           console.error('Auth callback error:', err);
           if (err instanceof Error) {
@@ -130,80 +233,23 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     };
 
     handleCallback();
-  }, []);
+  }, [isInitialized, fetchUserInfo, logout]);
 
-  // Function to refresh access token using refresh token
-  const refreshAccessToken = async (refreshToken: string) => {
+  // Refresh user roles
+  const refreshRoles = async () => {
     try {
       setIsConnecting(true);
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Token refresh failed: ${errorText}`);
+      const accessToken = localStorage.getItem('discord_access_token');
+      if (!accessToken) {
+        throw new Error('Not logged in');
       }
 
-      const tokenData = await response.json();
-
-      // Save new tokens
-      localStorage.setItem('discord_access_token', tokenData.access_token);
-      localStorage.setItem('discord_refresh_token', tokenData.refresh_token);
-
-      // Calculate when the token expires
-      const expiresAt = Date.now() + tokenData.expires_in * 1000;
-      localStorage.setItem('discord_expires_at', expiresAt.toString());
-
-      // Fetch user info with the new token
-      await fetchUserInfo(tokenData.access_token);
+      await fetchUserInfo(accessToken);
     } catch (err) {
-      console.error('Token refresh error:', err);
-      // If refresh fails, log out the user
-      logout();
+      console.error('Role refresh error:', err);
       throw err;
     } finally {
       setIsConnecting(false);
-    }
-  };
-
-  // Fetch user info from Discord API
-  const fetchUserInfo = async (accessToken: string) => {
-    try {
-      const response = await fetch('/api/auth/user', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch user info');
-      }
-
-      const userData = await response.json();
-
-      // Determine available leagues based on roles
-      const userLeagues = determineUserLeagues(userData.roles);
-      const primaryLeague = getPrimaryLeague(userLeagues);
-
-      setUser({
-        id: userData.id,
-        username: userData.username,
-        avatar: userData.avatar,
-        roles: userData.roles || [],
-        leagues: userLeagues,
-        primaryLeague,
-        roleDescription: generateRoleDescription(userData.roles || []),
-      });
-
-      // If this is a new connection, log it for debugging
-      console.log('Discord user connected:', userData.username);
-    } catch (err) {
-      console.error('Error fetching user info:', err);
-      throw err;
     }
   };
 
@@ -240,34 +286,6 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
         setError('Login initialization failed');
       }
     }
-  };
-
-  // Refresh user roles
-  const refreshRoles = async () => {
-    try {
-      setIsConnecting(true);
-      const accessToken = localStorage.getItem('discord_access_token');
-      if (!accessToken) {
-        throw new Error('Not logged in');
-      }
-
-      await fetchUserInfo(accessToken);
-    } catch (err) {
-      console.error('Role refresh error:', err);
-      throw err;
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  // Logout function
-  const logout = () => {
-    localStorage.removeItem('discord_access_token');
-    localStorage.removeItem('discord_refresh_token');
-    localStorage.removeItem('discord_expires_at');
-    localStorage.removeItem('discord_auth_state');
-    localStorage.removeItem('discord_code_verifier');
-    setUser(null);
   };
 
   return (

@@ -101,7 +101,7 @@ export function CharactersList() {
   if (!isConnected) {
     return (
       <div className="mt-8 text-center">
-        <p>Connect with Discord to view your characters</p>
+        <p>Connect Discord to summon your heroes</p>
       </div>
     );
   }
@@ -109,7 +109,7 @@ export function CharactersList() {
   return (
     <div className="mt-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">My Characters</h2>
+        <h2 className="text-xl font-bold">My Heroes</h2>
       </div>
 
       {isLoading ? (
@@ -121,7 +121,7 @@ export function CharactersList() {
         </div>
       ) : characters.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <p>No characters yet. Create your first character in one of your available leagues!</p>
+          <p>No heroes yet. Create your first hero in one of your available leagues!</p>
 
           {/* Display available leagues */}
           {user?.leagues && user.leagues.length > 0 ? (
@@ -142,7 +142,7 @@ export function CharactersList() {
                       onClick={() => handleCreateButtonClick(league)}
                       className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white text-sm"
                     >
-                      Create Character in {leagueInfo.name}
+                      Create Hero in {leagueInfo.name}
                     </button>
                   </div>
                 );
@@ -154,7 +154,7 @@ export function CharactersList() {
         </div>
       ) : (
         <div>
-          <h3 className="text-lg font-medium mb-3">Your League Characters</h3>
+          <h3 className="text-lg font-medium mb-3">Your Leagues & Heroes</h3>
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             {user?.leagues && user.leagues.map(league => {
               const leagueInfo = getLeagueInfo(league);
@@ -180,7 +180,7 @@ export function CharactersList() {
                             <div className="text-xs text-gray-500 mt-1">ID: {formatOwnerId(character.owner)}</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-bold">{character.elo} Elo</div>
+                            <div className="text-lg font-bold">{character.elo} Fame Points</div>
                             <div className="text-sm text-gray-400">
                               {character.wins}W {character.losses}L {character.draws}D
                             </div>
@@ -190,12 +190,12 @@ export function CharactersList() {
                     </Link>
                   ) : (
                     <div className="p-4 flex flex-col items-center justify-center text-center">
-                      <p className="text-gray-400 mb-3">No character in this league yet</p>
+                      <p className="text-gray-400 mb-3">No hero in this league yet</p>
                       <button
                         onClick={() => handleCreateButtonClick(league)}
                         className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white text-sm"
                       >
-                        Create Character
+                        Create Hero
                       </button>
                     </div>
                   )}

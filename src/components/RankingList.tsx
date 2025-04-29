@@ -107,7 +107,7 @@ export function RankingList() {
 
   return (
     <div className="mt-4">
-      <h2 className="text-xl font-bold mb-6">Rankings</h2>
+      <h2 className="text-xl font-bold mb-6">Leaderboard</h2>
       
       {/* League selector - larger, more prominent tabs */}
       <div className="mb-6">
@@ -147,7 +147,7 @@ export function RankingList() {
           <p>No rankings available for {getLeagueInfo(selectedLeague).name}</p>
           {user && user.leagues.includes(selectedLeague) && (
             <p className="mt-2 text-gray-400">
-              Create a character in this league to be the first on the leaderboard!
+              Create a hero in this league to be the first on the leaderboard!
             </p>
           )}
         </div>
@@ -164,9 +164,9 @@ export function RankingList() {
               <thead className="bg-gray-700">
                 <tr>
                   <th className="px-4 py-2 text-left">#</th>
-                  <th className="px-4 py-2 text-left">Character</th>
-                  <th className="px-4 py-2 text-left">Owner</th>
-                  <th className="px-4 py-2 text-right">Elo</th>
+                  <th className="px-4 py-2 text-left">Hero</th>
+                  <th className="px-4 py-2 text-left">Summoner</th>
+                  <th className="px-4 py-2 text-right">Fame Points</th>
                   <th className="px-4 py-2 text-right">W/L/D</th>
                 </tr>
               </thead>

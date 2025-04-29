@@ -1,21 +1,20 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { getDiscordAuthUrl } from '@/lib/discord-api';
+import { createContext, useState, useContext, useEffect } from 'react';
+import { generateRandomString, generateCodeChallenge } from '@/lib/pkce';
+import { determineUserLeagues, getPrimaryLeague, generateRoleDescription } from '@/lib/discord-roles';
 
-// Discord 사용자 정보 타입 정의
 interface DiscordUser {
   id: string;
   username: string;
-  discriminator: string;
   avatar: string | null;
   roles: string[];
   leagues: string[];
-  primaryLeague: string;
+  primaryLeague: string | null;
+  roleDescription: string;
 }
 
-// Discord 인증 Context 타입 정의
-interface DiscordAuthContextType {
+interface AuthContextType {
   user: DiscordUser | null;
   isConnected: boolean;
   isConnecting: boolean;
@@ -25,157 +24,269 @@ interface DiscordAuthContextType {
   refreshRoles: () => Promise<void>;
 }
 
-// 로컬 스토리지 키
-const AUTH_STORAGE_KEY = 'text-battle-discord-auth';
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-// Context 생성
-const DiscordAuthContext = createContext<DiscordAuthContextType>({
-  user: null,
-  isConnected: false,
-  isConnecting: false,
-  error: null,
-  login: () => {},
-  logout: () => {},
-  refreshRoles: async () => {},
-});
-
-// Provider 컴포넌트
-export function DiscordAuthProvider({ children }: { children: ReactNode }) {
+export function DiscordAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<DiscordUser | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [, setIsClient] = useState(false);
 
-  // 초기화 시 로컬 스토리지에서 인증 정보 로드
+  // Helper function to check if token is expired
+  const isTokenExpired = (expiresAt: number) => {
+    return Date.now() >= expiresAt;
+  };
+
+  // Check for existing session on mount
   useEffect(() => {
-    const loadAuthData = () => {
+    setIsClient(true);
+    const checkAuth = async () => {
       try {
-        // 브라우저 환경일 때만 실행
-        if (typeof window === 'undefined') return;
-        
-        const storedData = localStorage.getItem(AUTH_STORAGE_KEY);
-        
-        if (storedData) {
-          const userData = JSON.parse(storedData) as DiscordUser;
-          setUser(userData);
-          setIsConnected(true);
+        // Check if there's a token in localStorage and if it's not expired
+        const accessToken = localStorage.getItem('discord_access_token');
+        const expiresAt = Number(localStorage.getItem('discord_expires_at') || '0');
+        const refreshToken = localStorage.getItem('discord_refresh_token');
+
+        if (!accessToken) return;
+
+        // If token is expired, try to refresh it
+        if (isTokenExpired(expiresAt) && refreshToken) {
+          await refreshAccessToken(refreshToken);
+          return;
         }
+
+        // If we have a valid token, fetch the user info
+        await fetchUserInfo(accessToken);
       } catch (err) {
-        console.error('Error loading authentication data:', err);
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+        console.error('Auth check error:', err);
+        // Clear tokens if they're invalid
+        logout();
       }
     };
 
-    loadAuthData();
+    checkAuth();
+
+    // Handle Discord OAuth callback
+    const handleCallback = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const state = urlParams.get('state');
+      const storedState = localStorage.getItem('discord_auth_state');
+      const codeVerifier = localStorage.getItem('discord_code_verifier');
+
+      // Clear URL params without refreshing the page
+      if (code) {
+        const url = new URL(window.location.href);
+        url.search = '';
+        window.history.replaceState({}, document.title, url.href);
+      }
+
+      // If we have a code and the state matches, exchange it for a token
+      if (code && state && storedState && codeVerifier && state === storedState) {
+        localStorage.removeItem('discord_auth_state');
+        localStorage.removeItem('discord_code_verifier');
+
+        try {
+          setIsConnecting(true);
+          setError(null);
+
+          // Exchange code for token
+          const tokenResponse = await fetch('/api/auth/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, codeVerifier }),
+          });
+
+          if (!tokenResponse.ok) {
+            const errorText = await tokenResponse.text();
+            throw new Error(`Token exchange failed: ${errorText}`);
+          }
+
+          const tokenData = await tokenResponse.json();
+
+          // Save tokens
+          localStorage.setItem('discord_access_token', tokenData.access_token);
+          localStorage.setItem('discord_refresh_token', tokenData.refresh_token);
+
+          // Calculate when the token expires
+          const expiresAt = Date.now() + tokenData.expires_in * 1000;
+          localStorage.setItem('discord_expires_at', expiresAt.toString());
+
+          // Fetch user info with the new token
+          await fetchUserInfo(tokenData.access_token);
+
+        } catch (err) {
+          console.error('Auth callback error:', err);
+          if (err instanceof Error) {
+            setError(err.message);
+          } else {
+            setError('Authentication failed');
+          }
+          logout();
+        } finally {
+          setIsConnecting(false);
+        }
+      }
+    };
+
+    handleCallback();
   }, []);
 
-  // Discord 로그인 페이지로 리디렉션
-  const login = () => {
-    setIsConnecting(true);
-    setError(null);
-
+  // Function to refresh access token using refresh token
+  const refreshAccessToken = async (refreshToken: string) => {
     try {
-      const authUrl = getDiscordAuthUrl();
-      window.location.href = authUrl;
-    } catch (err) {
-      setIsConnecting(false);
-      setError(err instanceof Error ? err.message : '인증 URL 생성 실패');
-      console.error('Error generating auth URL:', err);
-    }
-  };
-
-  // 로그아웃
-  const logout = () => {
-    setUser(null);
-    setIsConnected(false);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-  };
-
-  // Discord 역할 갱신
-  const refreshRoles = async () => {
-    if (!user || !user.id) {
-      setError('역할을 업데이트하려면 로그인해야 합니다.');
-      return;
-    }
-
-    setIsConnecting(true);
-    setError(null);
-
-    try {
-      // 역할 갱신 API 호출
-      const response = await fetch('/api/discord/refresh-roles', {
+      setIsConnecting(true);
+      const response = await fetch('/api/auth/refresh', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId: user.id }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: '알 수 없는 오류', code: 'UNKNOWN_ERROR' }));
-        
-        // 토큰 만료 오류인 경우 자동 로그아웃
-        if (errorData.code === 'AUTH_EXPIRED') {
-          logout();
-          throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
-        }
-        
-        throw new Error(errorData.error || `역할 갱신 실패 (${response.status})`);
+        const errorText = await response.text();
+        throw new Error(`Token refresh failed: ${errorText}`);
       }
 
-      // 업데이트된 사용자 정보로 상태 갱신
-      const updatedUser = await response.json();
-      setUser(updatedUser);
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
-      
+      const tokenData = await response.json();
+
+      // Save new tokens
+      localStorage.setItem('discord_access_token', tokenData.access_token);
+      localStorage.setItem('discord_refresh_token', tokenData.refresh_token);
+
+      // Calculate when the token expires
+      const expiresAt = Date.now() + tokenData.expires_in * 1000;
+      localStorage.setItem('discord_expires_at', expiresAt.toString());
+
+      // Fetch user info with the new token
+      await fetchUserInfo(tokenData.access_token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '역할 갱신 실패');
-      console.error('Error refreshing roles:', err);
+      console.error('Token refresh error:', err);
+      // If refresh fails, log out the user
+      logout();
+      throw err;
     } finally {
       setIsConnecting(false);
     }
   };
 
-  // Context 값
-  const value: DiscordAuthContextType = {
-    user,
-    isConnected,
-    isConnecting,
-    error,
-    login,
-    logout,
-    refreshRoles,
+  // Fetch user info from Discord API
+  const fetchUserInfo = async (accessToken: string) => {
+    try {
+      const response = await fetch('/api/auth/user', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user info');
+      }
+
+      const userData = await response.json();
+
+      // Determine available leagues based on roles
+      const userLeagues = determineUserLeagues(userData.roles);
+      const primaryLeague = getPrimaryLeague(userLeagues);
+
+      setUser({
+        id: userData.id,
+        username: userData.username,
+        avatar: userData.avatar,
+        roles: userData.roles || [],
+        leagues: userLeagues,
+        primaryLeague,
+        roleDescription: generateRoleDescription(userData.roles || []),
+      });
+
+      // If this is a new connection, log it for debugging
+      console.log('Discord user connected:', userData.username);
+    } catch (err) {
+      console.error('Error fetching user info:', err);
+      throw err;
+    }
+  };
+
+  // Login function
+  const login = () => {
+    try {
+      // Generate PKCE code verifier and challenge
+      const codeVerifier = generateRandomString(128);
+      generateCodeChallenge(codeVerifier).then(codeChallenge => {
+        // Generate state parameter
+        const state = generateRandomString(40);
+        localStorage.setItem('discord_auth_state', state);
+        localStorage.setItem('discord_code_verifier', codeVerifier);
+
+        // Construct auth URL
+        const params = new URLSearchParams({
+          response_type: 'code',
+          client_id: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '',
+          scope: 'identify',
+          state,
+          redirect_uri: process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || window.location.origin,
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256',
+          prompt: 'consent',
+        });
+
+        window.location.href = `https://discord.com/api/oauth2/authorize?${params}`;
+      });
+    } catch (err) {
+      console.error('Login error:', err);
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Login initialization failed');
+      }
+    }
+  };
+
+  // Refresh user roles
+  const refreshRoles = async () => {
+    try {
+      setIsConnecting(true);
+      const accessToken = localStorage.getItem('discord_access_token');
+      if (!accessToken) {
+        throw new Error('Not logged in');
+      }
+
+      await fetchUserInfo(accessToken);
+    } catch (err) {
+      console.error('Role refresh error:', err);
+      throw err;
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // Logout function
+  const logout = () => {
+    localStorage.removeItem('discord_access_token');
+    localStorage.removeItem('discord_refresh_token');
+    localStorage.removeItem('discord_expires_at');
+    localStorage.removeItem('discord_auth_state');
+    localStorage.removeItem('discord_code_verifier');
+    setUser(null);
   };
 
   return (
-    <DiscordAuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isConnected: !!user,
+        isConnecting,
+        error,
+        login,
+        logout,
+        refreshRoles,
+      }}
+    >
       {children}
-    </DiscordAuthContext.Provider>
+    </AuthContext.Provider>
   );
 }
 
-// Hook export
 export function useDiscordAuth() {
-  return useContext(DiscordAuthContext);
-}
-
-// 사용자 리그 접근 권한 체크 헬퍼 함수
-export function useLeagueAccess(leagueId: string) {
-  const { user, isConnected } = useDiscordAuth();
-  
-  if (!isConnected || !user) {
-    return false;
-  }
-  
-  return user.leagues.includes(leagueId);
-}
-
-// 캐릭터 액세스 권한 체크 헬퍼 함수 (계정당 하나의 캐릭터)
-export function useCharacterAccess() {
-  const { user, isConnected } = useDiscordAuth();
-  
-  return {
-    canAccess: isConnected && !!user,
-    userId: user?.id || null,
-  };
+  return useContext(AuthContext);
 }

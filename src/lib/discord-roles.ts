@@ -17,7 +17,7 @@ export const LEAGUES = {
     color: '#6a7ec7',
     icon: '1️⃣',
     description: 'For every Mitosian brave enough to enter the arena.',
-    eligibility: 'Have the Mitosian role in Mitosis Discord',
+    eligibility: 'Have the THB League 1 role in Mitosis Discord',
     order: 1
   },
   veteran: {
@@ -26,7 +26,7 @@ export const LEAGUES = {
     color: '#c7c7c7',
     icon: '2️⃣',
     description: 'You\'ve touched the Vaults. You\'ve earned your place.',
-    eligibility: 'Have the Expedition Explorer role in Mitosis Discord',
+    eligibility: 'THB League 2 role in Mitosis Discord',
     order: 2
   },
   community: {
@@ -35,7 +35,7 @@ export const LEAGUES = {
     color: '#e5c07b',
     icon: '3️⃣',
     description: 'The ones who built the culture together.',
-    eligibility: 'Have at least one of the community roles in Mitosis Discord',
+    eligibility: 'THB League 3 role in Mitosis Discord',
     order: 3
   },
   morse: {
@@ -44,7 +44,7 @@ export const LEAGUES = {
     color: '#e06c75',
     icon: '4️⃣',
     description: 'You train Morse well. But can you train your hero for battle?',
-    eligibility: 'Have the Morse Trainer role in Mitosis Discord',
+    eligibility: 'THB League 4 role in Mitosis Discord',
     order: 4
   }
 };

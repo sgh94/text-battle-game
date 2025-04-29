@@ -12,9 +12,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('Token exchange request received:');
+    console.log('- Code:', code ? `${code.substring(0, 10)}...` : 'missing');
+    console.log('- Code verifier:', codeVerifier ? `present (${codeVerifier.length} chars)` : 'missing');
+
     // 인증 코드를 액세스 토큰으로 교환 (PKCE 코드 검증기 포함)
     const tokenData = await exchangeCodeForToken(code, codeVerifier);
 
+    console.log('Token exchange successful');
     return NextResponse.json(tokenData);
   } catch (error) {
     console.error('Token exchange error:', error);

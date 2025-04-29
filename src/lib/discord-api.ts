@@ -105,6 +105,15 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
         continue;
       }
       
+      // Handle 5xx server errors with retry
+      if (response.status >= 500 && response.status < 600) {
+        console.log(`Discord API server error (${response.status}). Retrying...`);
+        const waitTime = Math.pow(2, retries) * 1000;
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        retries++;
+        continue;
+      }
+      
       return response;
     } catch (error) {
       // 네트워크 오류 등에 대한 재시도
@@ -157,13 +166,14 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
   });
 
   try {
+    // Increase max retries for token exchange to 5
     const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formBody.toString(),
-    });
+    }, 5);
 
     if (!response.ok) {
       let errorData;
@@ -198,6 +208,16 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
     };
   } catch (error) {
     console.error('Token exchange error details:', error);
+    
+    // Check if this is a network error and provide a clear message
+    if (error instanceof TypeError || error.message.includes('fetch')) {
+      throw new DiscordAPIError(
+        'Network error when connecting to Discord. Please check your internet connection.',
+        0,
+        'NETWORK_ERROR'
+      );
+    }
+    
     throw error;
   }
 }
@@ -221,7 +241,7 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: params.toString(),
-  });
+  }, 3);
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
@@ -282,7 +302,7 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
-  });
+  }, 3);
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));

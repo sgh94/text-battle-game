@@ -6,28 +6,46 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    // 헤더에서 액세스 토큰 추출
-    const authHeader = request.headers.get('Authorization') || '';
-    const token = authHeader.replace('Bearer ', '');
-
-    if (!token) {
+    // Get token from Authorization header
+    const authHeader = request.headers.get('Authorization');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'No access token provided' }, 
+        { error: 'Invalid Authorization header' },
         { status: 401 }
       );
     }
+    
+    const token = authHeader.substring(7);
 
-    // Discord에서 사용자 정보 가져오기
+    if (!token) {
+      return NextResponse.json(
+        { error: 'No token provided' },
+        { status: 401 }
+      );
+    }
+    
+    console.log('Fetching Discord user info with token');
+    
+    // 사용자 정보 가져오기
     const userData = await fetchDiscordUser(token);
-
+    
     // 사용자의 길드 역할 가져오기
-    const userRoles = await fetchUserGuildRoles(token, userData.id);
-
-    // 역할 기반으로 리그 확인
+    let userRoles: string[] = [];
+    try {
+      userRoles = await fetchUserGuildRoles(token, userData.id);
+      console.log('User has', userRoles.length, 'Discord roles');
+    } catch (error) {
+      console.error('Error fetching guild roles:', error);
+      // 역할 가져오기 실패해도 계속 진행 (빈 배열로)
+      userRoles = [];
+    }
+    
+    // 역할 기반으로 리그 결정
     const leagues = determineUserLeagues(userRoles);
     const primaryLeague = getPrimaryLeague(leagues);
-
-    // 필요한 사용자 정보만 응답
+    
+    // 응답 데이터 구성
     const responseData = {
       id: userData.id,
       username: userData.username,
@@ -37,11 +55,12 @@ export async function GET(request: NextRequest) {
       leagues,
       primaryLeague,
     };
-
+    
     return NextResponse.json(responseData);
+    
   } catch (error) {
-    console.error('Error fetching user data:', error);
-
+    console.error('Error processing user request:', error);
+    
     // Discord API 오류 처리
     if (error instanceof DiscordAPIError) {
       return NextResponse.json(
@@ -49,8 +68,8 @@ export async function GET(request: NextRequest) {
         { status: error.status }
       );
     }
-
-    // 기타 오류 처리
+    
+    // 일반 오류
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Failed to fetch user data',

@@ -1,5 +1,9 @@
+'use server';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { refreshToken, DiscordAPIError } from '@/lib/discord-api';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {

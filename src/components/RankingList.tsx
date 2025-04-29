@@ -31,6 +31,9 @@ export function RankingList() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState('general');
   const [allLeagues, setAllLeagues] = useState<string[]>(['general', 'veteran', 'community', 'morse']);
+  
+  // 디버그용 상태 추가
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     // Set user's available leagues if they're logged in
@@ -51,7 +54,10 @@ export function RankingList() {
   const fetchRankings = async (leagueId: string) => {
     try {
       setIsLoading(true);
+      setFetchError(null);
       const userId = user?.id;
+      
+      console.log(`Fetching rankings for league: ${leagueId}`);
       
       // Fetch top 10 rankings for the selected league
       const response = await fetch(`/api/ranking?league=${leagueId}&limit=10`);
@@ -59,7 +65,22 @@ export function RankingList() {
       if (response.ok) {
         const data = await response.json();
         console.log(`Rankings for ${leagueId}:`, data.rankings);
-        setRankings(data.rankings || []);
+        
+        // Filter out characters that don't belong to the selected league
+        // Except for 'general' league which shows all
+        let filteredRankings = data.rankings || [];
+        
+        if (leagueId !== 'general') {
+          filteredRankings = filteredRankings.filter((char: Character) => 
+            char.league === leagueId || !char.league
+          );
+          
+          console.log(`Filtered rankings for ${leagueId}:`, 
+            filteredRankings.map((r: Character) => ({ id: r.id, name: r.name, league: r.league }))
+          );
+        }
+        
+        setRankings(filteredRankings);
         
         // If user is logged in, fetch their ranking
         if (userId) {
@@ -72,11 +93,22 @@ export function RankingList() {
             } else {
               setUserRanking(null);
             }
+          } else {
+            console.error(`Failed to fetch user ranking:`, 
+              await userRankingResponse.text().catch(() => 'Unknown error')
+            );
+            setUserRanking(null);
           }
         }
+      } else {
+        console.error('Failed to fetch rankings:', 
+          await response.text().catch(() => 'Unknown error')
+        );
+        setFetchError(`Failed to fetch rankings for league: ${leagueId}`);
       }
     } catch (error) {
       console.error('Error fetching rankings:', error);
+      setFetchError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -135,6 +167,13 @@ export function RankingList() {
         </div>
       </div>
 
+      {fetchError && (
+        <div className="bg-red-900/30 border border-red-700 text-red-200 px-4 py-3 rounded-md mb-4">
+          <p className="font-medium">오류 발생</p>
+          <p className="text-sm">{fetchError}</p>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center my-8">
           <svg className="animate-spin h-8 w-8 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -157,6 +196,9 @@ export function RankingList() {
           <div className="bg-gray-800 p-3 rounded-t-lg flex items-center border-b border-gray-700">
             <span className="text-xl mr-2">{getLeagueInfo(selectedLeague).icon}</span>
             <span className="font-bold">{getLeagueInfo(selectedLeague).name}</span>
+            <span className="ml-auto text-xs text-gray-500">
+              {rankings.length} characters
+            </span>
           </div>
           
           <div className="bg-gray-800 rounded-b-lg overflow-hidden">
@@ -183,6 +225,9 @@ export function RankingList() {
                       <Link href={`/character/${character.id}`} className="text-purple-400 hover:text-purple-300">
                         {character.name}
                       </Link>
+                      <span className="ml-2 text-xs text-gray-500">
+                        ({character.league || 'general'})
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-gray-400">{formatAddress(character.owner)}</td>
                     <td className="px-4 py-3 text-right font-bold">{character.elo}</td>

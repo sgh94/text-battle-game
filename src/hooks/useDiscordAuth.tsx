@@ -3,6 +3,7 @@
 import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { generateRandomString, generateCodeChallenge } from '@/lib/pkce';
 import { determineUserLeagues, getPrimaryLeague, generateRoleDescription } from '@/lib/discord-roles';
+import { useRouter } from 'next/navigation';
 
 interface DiscordUser {
   id: string;
@@ -32,10 +33,12 @@ const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname =
   : 'https://character-battle-game.vercel.app/auth/callback';
 
 export function DiscordAuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<DiscordUser | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Helper function to check if token is expired
   const isTokenExpired = (expiresAt: number) => {
@@ -43,8 +46,10 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
   };
 
   // Fetch user info from Discord API
-  const fetchUserInfo = useCallback(async (accessToken: string) => {
+  const fetchUserInfo = useCallback(async (accessToken: string, retries = 0) => {
     try {
+      console.log('Fetching user info, attempt:', retries + 1);
+      
       const response = await fetch('/api/auth/user', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -53,6 +58,16 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       });
 
       if (!response.ok) {
+        // If we get rate limited (429), wait and retry
+        if (response.status === 429 && retries < 3) {
+          console.log('Rate limited, waiting to retry...');
+          const retryAfter = response.headers.get('Retry-After') || '2';
+          const delay = parseInt(retryAfter, 10) * 1000 || 2000;
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return fetchUserInfo(accessToken, retries + 1);
+        }
+        
         console.error('Failed to fetch user info:', await response.text());
         throw new Error('Failed to fetch user info');
       }
@@ -78,14 +93,25 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
       setUser(userInfo);
 
+      // Force a router refresh to update UI
+      router.refresh();
+
       // If this is a new connection, log it for debugging
       console.log('Discord user connected:', userData.username);
       return userInfo;
     } catch (err) {
       console.error('Error fetching user info:', err);
+      
+      // Only retry for network errors, not for logical errors
+      if (retries < 3 && (err instanceof TypeError || (err as any)?.code === 'FETCH_ROLES_FAILED')) {
+        console.log('Retrying user info fetch after error...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return fetchUserInfo(accessToken, retries + 1);
+      }
+      
       throw err;
     }
-  }, []);
+  }, [router]);
 
   // Function to refresh access token using refresh token
   const refreshAccessToken = useCallback(async (refreshToken: string) => {
@@ -132,9 +158,12 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     localStorage.removeItem('discord_auth_state');
     localStorage.removeItem('discord_code_verifier');
     setUser(null);
-  }, []);
+    
+    // Force UI update
+    router.refresh();
+  }, [router]);
 
-  // Check for existing session on mount
+  // Check for existing session on mount and periodically try to fetch user data if needed
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -171,7 +200,26 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     };
 
     checkAuth();
-  }, [fetchUserInfo, refreshAccessToken, logout]);
+
+    // If user is not set after initialization and we have a retry count less than 3,
+    // try to fetch user data again after a delay
+    const retryTimer = setInterval(() => {
+      if (isInitialized && !user && retryCount < 3) {
+        const accessToken = localStorage.getItem('discord_access_token');
+        if (accessToken) {
+          console.log('Retrying user info fetch, attempt:', retryCount + 1);
+          fetchUserInfo(accessToken).catch(err => console.error('Retry fetch error:', err));
+          setRetryCount(prev => prev + 1);
+        } else {
+          clearInterval(retryTimer);
+        }
+      } else if (retryCount >= 3 || user) {
+        clearInterval(retryTimer);
+      }
+    }, 2000); // Retry every 2 seconds
+
+    return () => clearInterval(retryTimer);
+  }, [fetchUserInfo, refreshAccessToken, logout, isInitialized, user, retryCount]);
 
   // Handle Discord OAuth callback
   useEffect(() => {
@@ -235,6 +283,9 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
           // Fetch user info with the new token
           await fetchUserInfo(tokenData.access_token);
+          
+          // Force a navigation refresh to update UI immediately
+          router.refresh();
         } catch (err) {
           console.error('Auth callback error:', err);
           if (err instanceof Error) {
@@ -250,7 +301,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     };
 
     handleCallback();
-  }, [isInitialized, fetchUserInfo, logout]);
+  }, [isInitialized, fetchUserInfo, logout, router]);
 
   // Refresh user roles
   const refreshRoles = async () => {
@@ -262,6 +313,8 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       }
 
       await fetchUserInfo(accessToken);
+      // Force UI update
+      router.refresh();
     } catch (err) {
       console.error('Role refresh error:', err);
       throw err;

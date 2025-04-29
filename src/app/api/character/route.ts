@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     // Validate authentication
     const authResult = await validateAuth(request);
     if (!authResult.isValid) {
+      console.error('Authentication failed:', authResult.error);
       return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
@@ -19,6 +20,14 @@ export async function POST(request: NextRequest) {
     const traits = requestData?.traits as string;
     const userId = requestData?.userId; // This is Discord user ID
     const league = requestData?.league || 'general'; // Default league if not specified
+    
+    // Enhanced logging
+    console.log('Character creation request:', {
+      userAddress,
+      userId,
+      name: name?.substring(0, 20),
+      league,
+    });
     
     // Basic validation
     if (!name || !traits) {
@@ -33,17 +42,35 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user's Discord data to verify league access
-    let userLeagues = ['bronze']; // Default
+    let userLeagues = ['general']; // Default (changed from 'bronze' for consistency)
+    let discordUser = null;
+    
     if (userId) {
-      const discordUser = await getDiscordUser(userId);
-      if (discordUser && discordUser.leagues) {
-        userLeagues = discordUser.leagues;
+      try {
+        discordUser = await getDiscordUser(userId);
+        if (discordUser && discordUser.leagues) {
+          userLeagues = discordUser.leagues;
+          console.log(`User ${userId} has leagues:`, userLeagues);
+        } else {
+          console.warn(`No leagues found for user ${userId}`);
+        }
+      } catch (error) {
+        console.error('Error fetching Discord user:', error);
+        return NextResponse.json(
+          { error: 'Failed to verify Discord user information' },
+          { status: 500 }
+        );
       }
     }
 
-    // Verify the user has access to the specified league
-    if (!userLeagues.includes(league)) {
-      return NextResponse.json({ error: 'You do not have access to this league' }, { status: 403 });
+    // Always allow access to the general league
+    if (league !== 'general' && !userLeagues.includes(league)) {
+      return NextResponse.json(
+        { 
+          error: `You do not have access to the ${league} league. Available leagues: ${userLeagues.join(', ')}` 
+        },
+        { status: 403 }
+      );
     }
 
     // Get user's existing characters
@@ -53,29 +80,38 @@ export async function POST(request: NextRequest) {
       const characterIdsResponse = await kv.smembers(`user:${characterOwner}:characters`);
       // Ensure characterIds is an array
       characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
+      console.log(`Found ${characterIds.length} existing characters for ${characterOwner}`);
     } catch (kvError) {
       console.warn('KV database error on fetching character IDs', kvError);
     }
 
     // Check if the user already has a character in this league
     if (characterIds.length > 0) {
-      // Get all characters to check their leagues
-      const characters = await Promise.all(
-        characterIds.map(async (id) => {
-          return await kv.hgetall<Character>(`character:${id}`);
-        })
-      );
-      
-      // Filter out null values
-      const userCharacters = characters.filter((char): char is Character => char !== null);
-      
-      // Check if user already has a character in this league
-      const existingCharacterInLeague = userCharacters.find(char => char.league === league);
-      
-      if (existingCharacterInLeague) {
+      try {
+        // Get all characters to check their leagues
+        const characters = await Promise.all(
+          characterIds.map(async (id) => {
+            return await kv.hgetall<Character>(`character:${id}`);
+          })
+        );
+        
+        // Filter out null values
+        const userCharacters = characters.filter((char): char is Character => char !== null);
+        
+        // Check if user already has a character in this league
+        const existingCharacterInLeague = userCharacters.find(char => char.league === league);
+        
+        if (existingCharacterInLeague) {
+          return NextResponse.json(
+            { error: `You already have a character in the ${league} league. Only one character per league is allowed.` },
+            { status: 400 }
+          );
+        }
+      } catch (error) {
+        console.error('Error checking existing characters:', error);
         return NextResponse.json(
-          { error: `You already have a character in the ${league} league. Only one character per league is allowed.` },
-          { status: 400 }
+          { error: 'Failed to verify existing characters' },
+          { status: 500 }
         );
       }
     }
@@ -121,7 +157,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, character });
   } catch (error) {
     console.error('Error creating character:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
+      { status: 500 }
+    );
   }
 }
 

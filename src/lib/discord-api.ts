@@ -19,6 +19,9 @@ const REDIRECT_URI = process.env.NODE_ENV === 'development'
 
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
+// Global refresh token lock to prevent concurrent refresh attempts
+const refreshingTokens = new Set<string>();
+
 // 전역 요청 제한 관리를 위한 간단한 캐시
 const rateLimitCache = {
   lastRequestTime: 0,
@@ -228,45 +231,74 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
     throw new Error('Discord client credentials not configured');
   }
 
-  const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    client_secret: CLIENT_SECRET,
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-  });
-
-  const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params.toString(),
-  }, 3);
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+  // Check if we're already refreshing this user's token
+  if (refreshingTokens.has(userId)) {
+    // Wait a bit and check if a new token is available
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const existingToken = await getDiscordToken(userId);
+    
+    if (existingToken && isTokenValid(existingToken)) {
+      return existingToken;
+    }
+    
+    // If still not valid, throw an error to prevent infinite loops
     throw new DiscordAPIError(
-      data.error || `Failed to refresh token: ${response.status}`,
-      response.status,
-      'TOKEN_REFRESH_FAILED'
+      'Token refresh already in progress but not completed',
+      409,
+      'TOKEN_REFRESH_CONFLICT'
     );
   }
+  
+  // Add to the refreshing set to prevent concurrent refreshes
+  refreshingTokens.add(userId);
+  
+  try {
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    });
 
-  const data = await response.json();
+    const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    }, 3);
 
-  // 만료 시간 계산
-  const expiresAt = Date.now() + data.expires_in * 1000;
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+      throw new DiscordAPIError(
+        data.error || `Failed to refresh token: ${response.status}`,
+        response.status,
+        'TOKEN_REFRESH_FAILED'
+      );
+    }
 
-  const newToken = {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at: expiresAt,
-  };
+    const data = await response.json();
 
-  // 토큰 저장
-  await saveDiscordToken(userId, newToken);
+    // 만료 시간 계산
+    const expiresAt = Date.now() + data.expires_in * 1000;
 
-  return newToken;
+    const newToken = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: expiresAt,
+    };
+
+    // 토큰 저장
+    await saveDiscordToken(userId, newToken);
+
+    return newToken;
+  } catch (error) {
+    console.error(`Token refresh error for user ${userId}:`, error);
+    throw error;
+  } finally {
+    // Always remove from the refreshing set
+    refreshingTokens.delete(userId);
+  }
 }
 
 // 유효한 액세스 토큰 가져오기 (필요시 갱신)
@@ -277,16 +309,30 @@ export async function getValidAccessToken(userId: string): Promise<string> {
     throw new DiscordAPIError('User token not found', 401, 'TOKEN_NOT_FOUND');
   }
 
+  // Add buffer time to ensure token isn't about to expire (1 minute)
+  const bufferTime = 60 * 1000;
+  const isTokenExpiringSoon = token.expires_at < (Date.now() + bufferTime);
+  
   // 토큰이 유효한지 확인
-  if (isTokenValid(token)) {
+  if (!isTokenExpiringSoon) {
     return token.access_token;
   }
 
-  // 토큰이 만료되었다면 갱신 시도
+  // 토큰이 만료되었거나 곧 만료될 예정이라면 갱신 시도
   try {
     const newToken = await refreshToken(userId, token.refresh_token);
     return newToken.access_token;
   } catch (error) {
+    // If it's a conflict (already refreshing), try once more after waiting
+    if (error instanceof DiscordAPIError && error.code === 'TOKEN_REFRESH_CONFLICT') {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      const retryToken = await getDiscordToken(userId);
+      
+      if (retryToken && isTokenValid(retryToken)) {
+        return retryToken.access_token;
+      }
+    }
+    
     // 토큰 갱신에 실패하면 다시 로그인 필요
     throw new DiscordAPIError(
       'Token expired and refresh failed, please login again',
@@ -309,7 +355,7 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
     throw new DiscordAPIError(
       data.error || `Failed to fetch user data: ${response.status}`,
       response.status,
-      'FETCH_USER_FAILED'
+      response.status === 401 ? 'TOKEN_INVALID' : 'FETCH_USER_FAILED'
     );
   }
 
@@ -336,11 +382,22 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
   if (!response.ok) {
     // 사용자가 길드에 없는 경우
     if (response.status === 404) {
+      console.warn(`User ${userId} is not a member of guild ${GUILD_ID}`);
       return [];
     }
 
     const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
     const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+
+    // If unauthorized, indicate a token issue
+    if (response.status === 401) {
+      throw new DiscordAPIError(
+        'Discord authorization invalid or expired',
+        401,
+        'TOKEN_INVALID',
+        retryAfter
+      );
+    }
 
     throw new DiscordAPIError(
       data.error || `Failed to fetch guild roles: ${response.status}`,

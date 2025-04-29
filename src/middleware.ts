@@ -1,10 +1,29 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import crypto from 'crypto';
+
+// Simple function to generate a random string (Edge Runtime compatible)
+function generateNonce() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const length = 16;
+  
+  // Create a Uint8Array with the desired length
+  const randomValues = new Uint8Array(length);
+  
+  // Fill it with random values
+  crypto.getRandomValues(randomValues);
+  
+  // Convert to string
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(randomValues[i] % chars.length);
+  }
+  
+  return result;
+}
 
 export function middleware(request: NextRequest) {
-  // Generate a random nonce for CSP
-  const nonce = crypto.randomBytes(16).toString('base64');
+  // Generate a random nonce for CSP (Edge Runtime compatible)
+  const nonce = generateNonce();
   
   // Get response
   const response = NextResponse.next();
@@ -16,8 +35,8 @@ export function middleware(request: NextRequest) {
   // Allows Discord and other necessary services
   const cspHeader = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://cdn.discordapp.com https://cdnjs.cloudflare.com`,
-    `style-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://cdn.discordapp.com https://cdnjs.cloudflare.com`,
+    `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.discordapp.com https://cdnjs.cloudflare.com`,
+    `style-src 'self' 'unsafe-inline' https://cdn.discordapp.com https://cdnjs.cloudflare.com`,
     "img-src 'self' https: data: blob:",
     "font-src 'self' data: https://cdn.discordapp.com https://cdnjs.cloudflare.com",
     "connect-src 'self' https://discord.com https://*.discord.com https://api.openai.com",

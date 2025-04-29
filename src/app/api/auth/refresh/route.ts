@@ -1,5 +1,3 @@
-'use server';
-
 import { NextRequest, NextResponse } from 'next/server';
 import { refreshToken, DiscordAPIError } from '@/lib/discord-api';
 

@@ -11,15 +11,15 @@
 export function generateRandomString(length: number): string {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
   const values = new Uint8Array(length);
-  
+
   // Web Crypto API 사용 (Edge Runtime 호환)
   self.crypto.getRandomValues(values);
-  
+
   let result = '';
   for (let i = 0; i < length; i++) {
     result += possible.charAt(values[i] % possible.length);
   }
-  
+
   return result;
 }
 
@@ -35,7 +35,7 @@ function stringToBuffer(str: string): Uint8Array {
  * (URL 및 파일명 안전 BASE64 인코딩)
  */
 function base64URLEncode(buffer: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+  return btoa(Array.from(new Uint8Array(buffer)).map(byte => String.fromCharCode(byte)).join(''))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');

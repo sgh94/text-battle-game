@@ -13,7 +13,7 @@ const DISCORD_API_URL = 'https://discord.com/api/v10';
 const CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1088729716317495367';
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 // 리다이렉트 URI - Discord 개발자 포털에 등록된 것과 정확히 일치해야 함
-const REDIRECT_URI = process.env.NODE_ENV === 'development' 
+const REDIRECT_URI = process.env.NODE_ENV === 'development'
   ? 'http://localhost:3000/auth/callback'
   : (process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app/auth/callback');
 
@@ -23,17 +23,17 @@ const GUILD_ID = process.env.DISCORD_GUILD_ID;
 const rateLimitCache = {
   lastRequestTime: 0,
   minDelay: 250, // 최소 250ms 간격으로 요청 (Discord 권장)
-  
+
   // 요청 간 딜레이 보장
   async enforceDelay() {
     const now = Date.now();
     const timeSinceLastRequest = now - this.lastRequestTime;
-    
+
     if (timeSinceLastRequest < this.minDelay) {
       const waitTime = this.minDelay - timeSinceLastRequest;
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
-    
+
     this.lastRequestTime = Date.now();
   }
 };
@@ -86,25 +86,25 @@ export interface DiscordGuildMember {
 // 재시도 로직을 포함한 API 요청 헬퍼
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
   let retries = 0;
-  
+
   while (retries < maxRetries) {
     try {
       // 요청 간 딜레이 적용
       await rateLimitCache.enforceDelay();
-      
+
       const response = await fetch(url, options);
-      
+
       // 429 (요청 제한) 대응
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get('Retry-After') || '1', 10);
         const waitTime = retryAfter * 1000 || 1000;
         console.log(`Rate limited by Discord API. Waiting ${waitTime}ms before retry...`);
-        
+
         await new Promise(resolve => setTimeout(resolve, waitTime));
         retries++;
         continue;
       }
-      
+
       // Handle 5xx server errors with retry
       if (response.status >= 500 && response.status < 600) {
         console.log(`Discord API server error (${response.status}). Retrying...`);
@@ -113,23 +113,23 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
         retries++;
         continue;
       }
-      
+
       return response;
     } catch (error) {
       // 네트워크 오류 등에 대한 재시도
       console.error(`API call failed (attempt ${retries + 1}/${maxRetries}):`, error);
-      
+
       if (retries === maxRetries - 1) {
         throw error;
       }
-      
+
       // 지수 백오프 적용 (각 재시도마다 대기 시간 증가)
       const waitTime = Math.pow(2, retries) * 1000;
       await new Promise(resolve => setTimeout(resolve, waitTime));
       retries++;
     }
   }
-  
+
   throw new Error(`Failed after ${maxRetries} retries`);
 }
 
@@ -184,10 +184,10 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
         errorData = { error: 'Failed to parse error response' };
         console.error('Failed to parse Discord API error response');
       }
-      
+
       // 재시도 정보 추출
       const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
-      
+
       throw new DiscordAPIError(
         errorData.error || `Failed to exchange code for token: ${response.status}`,
         response.status,
@@ -208,16 +208,16 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
     };
   } catch (error) {
     console.error('Token exchange error details:', error);
-    
+
     // Check if this is a network error and provide a clear message
-    if (error instanceof TypeError || error.message.includes('fetch')) {
+    if (error instanceof TypeError || (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string' && error.message.includes('fetch'))) {
       throw new DiscordAPIError(
         'Network error when connecting to Discord. Please check your internet connection.',
         0,
         'NETWORK_ERROR'
       );
     }
-    
+
     throw error;
   }
 }
@@ -341,7 +341,7 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
 
     const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
     const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
-    
+
     throw new DiscordAPIError(
       data.error || `Failed to fetch guild roles: ${response.status}`,
       response.status,
@@ -365,7 +365,7 @@ export function getDiscordAuthUrl(code_challenge?: string): string {
   console.log('Using redirect URI:', REDIRECT_URI);
 
   const scope = 'identify guilds guilds.members.read';
-  
+
   // 기본 파라미터
   const params: Record<string, string> = {
     client_id: CLIENT_ID,
@@ -373,17 +373,17 @@ export function getDiscordAuthUrl(code_challenge?: string): string {
     response_type: 'code',
     scope: scope,
   };
-  
+
   // PKCE를 사용하는 경우 추가 파라미터
   if (code_challenge) {
     params.code_challenge = code_challenge;
     params.code_challenge_method = 'S256';
   }
-  
+
   const queryString = Object.entries(params)
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&');
-    
+
   return `https://discord.com/api/oauth2/authorize?${queryString}`;
 }
 

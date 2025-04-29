@@ -8,44 +8,44 @@ function DiscordCallbackInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState('processing');
-  const [error, setError] = useState(null);
-  const [userData, setUserData] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [userData, setUserData] = useState<{ username?: string } | null>(null);
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
         const code = searchParams.get('code');
         const state = searchParams.get('state');
-        
+
         if (!code) {
-          throw new Error('인증 코드가 없습니다');
+          throw new Error('Authentication code is missing');
         }
 
         setStatus('connecting');
-        
-        // 인증 토큰 교환
+
+        // Exchange authentication token
         const tokenResponse = await fetch('/api/auth/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            code, 
-            codeVerifier: localStorage.getItem('discord_code_verifier') 
+          body: JSON.stringify({
+            code,
+            codeVerifier: localStorage.getItem('discord_code_verifier')
           }),
         });
 
         if (!tokenResponse.ok) {
           const errorData = await tokenResponse.json();
-          throw new Error(errorData.error || '인증 처리 중 오류가 발생했습니다');
+          throw new Error(errorData.error || 'An error occurred during authentication');
         }
 
         const tokenData = await tokenResponse.json();
-        
-        // 토큰 저장
+
+        // Store tokens
         localStorage.setItem('discord_access_token', tokenData.access_token);
         localStorage.setItem('discord_refresh_token', tokenData.refresh_token);
         localStorage.setItem('discord_expires_at', String(Date.now() + tokenData.expires_in * 1000));
-        
-        // 사용자 정보 가져오기
+
+        // Get user information
         const userResponse = await fetch('/api/auth/user', {
           headers: {
             'Authorization': `Bearer ${tokenData.access_token}`,
@@ -53,38 +53,38 @@ function DiscordCallbackInner() {
         });
 
         if (!userResponse.ok) {
-          throw new Error('사용자 정보를 가져오는데 실패했습니다');
+          throw new Error('Failed to retrieve user information');
         }
 
         const userData = await userResponse.json();
         setUserData(userData);
         setStatus('success');
-        
-        // 인증 완료 후 메인 페이지로 이동
+
+        // Redirect to main page after authentication
         setTimeout(() => {
           window.location.href = '/';
         }, 1500);
-        
+
       } catch (err) {
-        console.error('인증 콜백 처리 오류:', err);
+        console.error('callback error:', err);
         setStatus('error');
-        setError(err.message);
+        setError(err instanceof Error ? err.message : 'Unknown error occurred');
       }
     };
 
-    // URL 파라미터에 코드가 있으면 콜백 처리 시작
+    // Start callback processing if code exists in URL parameters
     const code = searchParams.get('code');
     if (code) {
-      // URL 파라미터 정리
+      // Clean URL parameters
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
         url.search = '';
         window.history.replaceState({}, document.title, url.href);
       }
-      
+
       handleCallback();
     } else {
-      // 코드가 없으면 홈으로 리다이렉트
+      // Redirect to home if no code is present
       router.push('/');
     }
   }, [searchParams, router]);
@@ -97,9 +97,9 @@ function DiscordCallbackInner() {
             <div className="animate-spin h-10 w-10 border-4 border-indigo-500 rounded-full border-t-transparent"></div>
           </div>
           <h2 className="text-xl font-medium mb-2">
-            {status === 'processing' ? '인증 처리 중...' : '디스코드 연결 중...'}
+            {status === 'processing' ? 'Processing authentication...' : 'Connecting to Discord...'}
           </h2>
-          <p className="text-gray-600">잠시만 기다려주세요.</p>
+          <p className="text-gray-600">Please wait a moment.</p>
         </div>
       </div>
     );
@@ -114,11 +114,11 @@ function DiscordCallbackInner() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h2 className="text-xl font-medium text-red-600 mb-2">인증 오류</h2>
-          <p className="text-gray-600 mb-4">{error || '인증 과정에서 문제가 발생했습니다.'}</p>
+          <h2 className="text-xl font-medium text-red-600 mb-2">Authentication Error</h2>
+          <p className="text-gray-600 mb-4">{error || 'A problem occurred during authentication.'}</p>
           <Link href="/">
             <button className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors">
-              홈으로 돌아가기
+              Return to Home
             </button>
           </Link>
         </div>
@@ -135,13 +135,13 @@ function DiscordCallbackInner() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-medium text-green-600 mb-2">인증 성공!</h2>
-          {userData && (
+          <h2 className="text-xl font-medium text-green-600 mb-2">Authentication Successful!</h2>
+          {userData && 'username' in userData && (
             <div className="mb-4">
-              <p className="font-medium">{userData.username} 님 반갑습니다!</p>
+              <p className="font-medium">Welcome, {userData.username}!</p>
             </div>
           )}
-          <p className="text-gray-600 mb-4">곧 게임 페이지로 이동합니다...</p>
+          <p className="text-gray-600 mb-4">Redirecting to game page shortly...</p>
         </div>
       </div>
     );

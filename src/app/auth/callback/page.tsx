@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-function DiscordCallbackInner() {
+// 클라이언트 컴포넌트: URL 파라미터 직접 읽기
+function CallbackHandler() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [status, setStatus] = useState('processing');
   const [error, setError] = useState<string | null>(null);
   const [userData, setUserData] = useState<{ username?: string } | null>(null);
@@ -14,12 +14,19 @@ function DiscordCallbackInner() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        const code = searchParams.get('code');
-        const state = searchParams.get('state');
+        // URL에서 직접 코드와 상태 파라미터 추출
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
 
         if (!code) {
           throw new Error('Authentication code is missing');
         }
+
+        // URL 파라미터 정리
+        const url = new URL(window.location.href);
+        url.search = '';
+        window.history.replaceState({}, document.title, url.href);
 
         setStatus('connecting');
 
@@ -72,22 +79,19 @@ function DiscordCallbackInner() {
       }
     };
 
-    // Start callback processing if code exists in URL parameters
-    const code = searchParams.get('code');
-    if (code) {
-      // Clean URL parameters
-      if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href);
-        url.search = '';
-        window.history.replaceState({}, document.title, url.href);
+    // 브라우저 환경에서만 실행
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      
+      if (code) {
+        handleCallback();
+      } else {
+        // 코드가 없으면 홈으로 리다이렉트
+        router.push('/');
       }
-
-      handleCallback();
-    } else {
-      // Redirect to home if no code is present
-      router.push('/');
     }
-  }, [searchParams, router]);
+  }, [router]);
 
   if (status === 'processing' || status === 'connecting') {
     return (
@@ -150,6 +154,20 @@ function DiscordCallbackInner() {
   return null;
 }
 
+// Suspense 경계를 사용하는 메인 컴포넌트
 export default function DiscordCallback() {
-  return <DiscordCallbackInner />;
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
+          <div className="flex justify-center mb-4">
+            <div className="animate-spin h-10 w-10 border-4 border-indigo-500 rounded-full border-t-transparent"></div>
+          </div>
+          <h2 className="text-xl font-medium mb-2">Loading...</h2>
+        </div>
+      </div>
+    }>
+      <CallbackHandler />
+    </Suspense>
+  );
 }

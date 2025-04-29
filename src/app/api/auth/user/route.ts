@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchDiscordUser, fetchUserGuildRoles, DiscordAPIError } from '@/lib/discord-api';
 import { determineUserLeagues, getPrimaryLeague } from '@/lib/discord-roles';
+import { saveDiscordUser, getDiscordUser, DiscordUser } from '@/lib/db';
 
 // 서버 측 API 요청 추적 - 중복 요청 방지
 const requestCounts: Record<string, number> = {};
@@ -99,6 +100,33 @@ export async function GET(request: NextRequest) {
     // 역할 기반으로 리그 결정
     const leagues = determineUserLeagues(userRoles);
     const primaryLeague = getPrimaryLeague(leagues);
+    
+    // Check if user already exists in database
+    const existingUser = await getDiscordUser(userData.id);
+    
+    // If user doesn't exist or roles have changed, save to database
+    if (!existingUser || JSON.stringify(existingUser.roles) !== JSON.stringify(userRoles)) {
+      console.log(`Saving Discord user ${userData.id} (${userData.username}) to database`);
+      
+      const userToSave: DiscordUser = {
+        id: userData.id,
+        username: userData.username,
+        discriminator: userData.discriminator || '0',
+        avatar: userData.avatar,
+        roles: userRoles,
+        leagues,
+        primaryLeague: primaryLeague || '',
+        createdAt: existingUser?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const saveResult = await saveDiscordUser(userToSave);
+      if (!saveResult) {
+        console.error(`Failed to save Discord user ${userData.id} to database`);
+      } else {
+        console.log(`Successfully saved Discord user ${userData.id} to database`);
+      }
+    }
     
     // 응답 데이터 구성
     const responseData = {

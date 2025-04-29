@@ -12,7 +12,8 @@ const DISCORD_API_URL = 'https://discord.com/api/v10';
 // Use a fallback client ID in case the environment variable is not set
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1088729716317495367';
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-const REDIRECT_URI = process.env.isLocal ? 'http://localhost:3000/auth/callback' : 'https://character-battle-game.vercel.app/auth/callback';
+// 리다이렉트 URI를 정확히 지정 (주의: 반드시 Discord 개발자 포털에 설정된 URI와 정확히 일치해야 함)
+const REDIRECT_URI = process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app';
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
 // Discord API 오류 타입
@@ -59,7 +60,7 @@ export interface DiscordGuildMember {
 }
 
 // 인증 코드를 토큰으로 교환
-export async function exchangeCodeForToken(code: string): Promise<DiscordToken> {
+export async function exchangeCodeForToken(code: string, code_verifier?: string): Promise<DiscordToken> {
   if (!CLIENT_ID) {
     throw new Error('Discord client ID not configured');
   }
@@ -68,17 +69,25 @@ export async function exchangeCodeForToken(code: string): Promise<DiscordToken> 
     throw new Error('Discord client secret not configured');
   }
 
-  const params = new URLSearchParams({
+  const params: Record<string, string> = {
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
     grant_type: 'authorization_code',
     code,
     redirect_uri: REDIRECT_URI,
-  });
+  };
+
+  // PKCE로 인증하는 경우 code_verifier 추가
+  if (code_verifier) {
+    params.code_verifier = code_verifier;
+  }
+
+  const formBody = new URLSearchParams(params);
 
   console.log('Exchanging code for token with params:', {
     client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI
+    redirect_uri: REDIRECT_URI,
+    code_verifier: code_verifier ? '(provided)' : '(not provided)'
   });
 
   const response = await fetch(`${DISCORD_API_URL}/oauth2/token`, {
@@ -86,13 +95,18 @@ export async function exchangeCodeForToken(code: string): Promise<DiscordToken> 
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: params.toString(),
+    body: formBody.toString(),
   });
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      errorData = { error: 'Failed to parse error response' };
+    }
     throw new DiscordAPIError(
-      data.error || `Failed to exchange code for token: ${response.status}`,
+      errorData.error || `Failed to exchange code for token: ${response.status}`,
       response.status
     );
   }

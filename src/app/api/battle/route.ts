@@ -99,7 +99,7 @@ async function updateElo(winnerId: string, loserId: string, isDraw: boolean): Pr
       member: winnerId,
     });
   }
-  
+
   if (loserLeague !== 'general') {
     await kv.zadd('league:general:ranking', {
       score: newLoserElo,
@@ -113,7 +113,7 @@ async function updateElo(winnerId: string, loserId: string, isDraw: boolean): Pr
       score: newWinnerElo,
       member: winnerId,
     }, {
-      score: newLoserElo, 
+      score: newLoserElo,
       member: loserId,
     });
   }
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     const eloRange = 200; // Look for characters within +/- 200 ELO
 
     // Use the range command instead
-    const allCharactersResponse = await kv.zrange('characters:ranking', 0, -1, { withScores: true });
+    const allCharactersResponse = await kv.zrange('characters:ranking', characterElo - eloRange, characterElo + eloRange, { byScore: true, withScores: true, offset: 0, count: 20 });
     // Ensure allCharactersInRange is an array
     const allCharactersInRange = Array.isArray(allCharactersResponse) ? allCharactersResponse : [];
 

@@ -10,108 +10,67 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(request.nextUrl.searchParams.get('offset') || '0');
     const league = request.nextUrl.searchParams.get('league') || 'general';
 
-    // Get top characters by ELO for the specified league
-    const rankingKey = `league:${league}:ranking`;
+    console.log(`Fetching rankings for league: ${league}`);
+
+    // Get all characters first to properly filter by league
+    const allCharacterKeys = await kv.keys('character:*');
     
-    // Check if league-specific ranking exists, otherwise create it
-    const exists = await kv.exists(rankingKey);
-    if (!exists) {
-      console.log(`Creating new ranking for league: ${league}`);
-      // This is a new league ranking - we'll just return empty results now
-      // and populate it when characters in this league are created
+    if (!allCharacterKeys || allCharacterKeys.length === 0) {
+      console.log('No characters found');
       return NextResponse.json({ rankings: [] });
     }
-
-    const rankingResultsResponse = await kv.zrange(
-      rankingKey,
-      0,
-      -1,
-      {
-        rev: true, // Descending order (highest scores first)
-        withScores: true,
-      }
+    
+    // Fetch all characters
+    const charactersPromises = allCharacterKeys.map(key => 
+      kv.hgetall<Character>(key)
     );
-
-    // Ensure rankingResults is an array
-    const rankingResults = Array.isArray(rankingResultsResponse) ? rankingResultsResponse : [];
-
-    if (!rankingResults || rankingResults.length === 0) {
-      return NextResponse.json({ rankings: [] });
-    }
-
-    // Convert array format to object format
-    const characterScores: Array<ScoreMember> = [];
-    for (let i = 0; i < rankingResults.length; i += 2) {
-      const member = String(rankingResults[i]);
-      const score = parseFloat(String(rankingResults[i + 1]));
-      characterScores.push({
-        member,
-        score
-      });
-    }
-
+    
+    const allCharacters = await Promise.all(charactersPromises);
+    
+    // Filter characters that belong to the requested league
+    const leagueCharacters = allCharacters.filter(character => {
+      if (!character) return false;
+      
+      // For 'general' league, include all characters
+      if (league === 'general') return true;
+      
+      // Otherwise, strictly match the requested league
+      return character.league === league;
+    });
+    
+    console.log(`Found ${leagueCharacters.length} characters in league ${league}`);
+    
+    // Sort characters by ELO score (descending)
+    leagueCharacters.sort((a, b) => {
+      // Type assertion since we've filtered out null values
+      const aElo = (a as Character).elo || 0;
+      const bElo = (b as Character).elo || 0;
+      return bElo - aElo;
+    });
+    
     // Apply pagination
-    const paginatedScores = characterScores.slice(offset, offset + limit);
-
-    // Fetch character details
-    const rankings = await Promise.all(
-      paginatedScores.map(async (item: ScoreMember, index: number) => {
-        try {
-          const characterId = item.member;
-          const character = await kv.hgetall<Character>(`character:${characterId}`);
-
-          if (!character) {
-            console.log(`Character not found: ${characterId}`);
-            return null;
-          }
-
-          // Make sure to use the score from the ranking, not from the character object
-          // This ensures we display the most up-to-date ELO from the sorted set
-          return {
-            ...character,
-            rank: offset + index + 1,
-            elo: item.score, // Use the score from the sorted set
-          };
-        } catch (err) {
-          console.error(`Error fetching character ${item.member}:`, err);
-          return null;
-        }
-      })
-    );
-
-    // Strict filtering: only show characters that exactly match the requested league
-    const filteredRankings = rankings
-      .filter((ranking): ranking is Character & { rank: number, elo: number } => {
-        if (!ranking) return false;
-        
-        // 리그가 정확히 일치하는지 확인
-        // 'general' 리그는 예외적으로 모든 캐릭터가 표시될 수 있음
-        const leagueMatches = league === 'general' || ranking.league === league;
-        
-        if (!leagueMatches) {
-          console.log(`Character ${ranking.id} (${ranking.name}) filtered out - in league ${ranking.league}, requested ${league}`);
-        }
-        
-        return leagueMatches;
-      });
-
-    // Re-rank after filtering to ensure consistent numbering
-    const rankedResults = filteredRankings.map((character, index) => ({
-      ...character,
-      rank: offset + index + 1
-    }));
-
-    // Debug logging - useful for troubleshooting
-    console.log(`League ${league} rankings - found ${rankedResults.length} characters`);
-    console.log('First few rankings:', rankedResults.slice(0, 3).map(r => ({
+    const paginatedCharacters = leagueCharacters.slice(offset, offset + limit);
+    
+    // Format the result with rank information
+    const rankings = paginatedCharacters.map((character, index) => {
+      if (!character) return null;
+      
+      return {
+        ...character,
+        rank: offset + index + 1,
+      };
+    }).filter(Boolean);
+    
+    console.log(`Returning ${rankings.length} ranked characters`);
+    console.log('First few rankings:', rankings.slice(0, 3).map(r => ({
       id: r.id,
       name: r.name,
-      elo: r.elo,
       league: r.league,
-      rank: r.rank
+      rank: r.rank,
+      elo: r.elo
     })));
 
-    return NextResponse.json({ rankings: rankedResults });
+    return NextResponse.json({ rankings });
   } catch (error) {
     console.error('Error fetching rankings:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

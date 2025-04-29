@@ -2,14 +2,52 @@ import { NextRequest } from 'next/server';
 import { ethers } from 'ethers';
 import { getDiscordUser } from './db';
 
-// Store valid auth tokens to prevent excessive signature requests
+// Auth token type
 type AuthToken = {
   address: string;
   timestamp: number;
   expiresAt: number;
 };
 
-const validTokens = new Map<string, AuthToken>();
+// Storage key for token cache in localStorage (client-side)
+const AUTH_TOKEN_STORAGE_KEY = 'text_battle_auth_tokens';
+
+// In-memory cache for server-side
+const serverTokenCache = new Map<string, AuthToken>();
+
+// Get tokens from storage
+function getStoredTokens(): Record<string, AuthToken> {
+  if (typeof window === 'undefined') {
+    // Server-side, use in-memory cache
+    return Object.fromEntries(serverTokenCache.entries());
+  } else {
+    // Client-side, use localStorage
+    try {
+      const storedTokens = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+      return storedTokens ? JSON.parse(storedTokens) : {};
+    } catch (error) {
+      console.error('Failed to parse stored tokens:', error);
+      return {};
+    }
+  }
+}
+
+// Save token to storage
+function saveToken(cacheKey: string, token: AuthToken): void {
+  if (typeof window === 'undefined') {
+    // Server-side, use in-memory cache
+    serverTokenCache.set(cacheKey, token);
+  } else {
+    // Client-side, use localStorage
+    try {
+      const tokens = getStoredTokens();
+      tokens[cacheKey] = token;
+      localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, JSON.stringify(tokens));
+    } catch (error) {
+      console.error('Failed to save token:', error);
+    }
+  }
+}
 
 // Validate authentication from the request headers
 export async function validateAuth(request: NextRequest) {
@@ -31,7 +69,8 @@ export async function validateAuth(request: NextRequest) {
     
     // Check cache first to avoid redundant validation
     const cacheKey = `${address.toLowerCase()}:${timestamp}:${signature.substring(0, 10)}`;
-    const cachedToken = validTokens.get(cacheKey);
+    const tokens = getStoredTokens();
+    const cachedToken = tokens[cacheKey];
     
     if (cachedToken && cachedToken.expiresAt > Date.now()) {
       return { isValid: true, address: cachedToken.address };
@@ -51,11 +90,13 @@ export async function validateAuth(request: NextRequest) {
       console.warn('⚠️ Auth signature verification bypassed for development');
       
       // Store in cache
-      validTokens.set(cacheKey, {
+      const newToken = {
         address: address.toLowerCase(),
         timestamp: authTime,
         expiresAt: now + expirationTime
-      });
+      };
+      
+      saveToken(cacheKey, newToken);
       
       return { isValid: true, address: address.toLowerCase() };
     }
@@ -71,11 +112,13 @@ export async function validateAuth(request: NextRequest) {
       }
       
       // Store valid token in cache
-      validTokens.set(cacheKey, {
+      const newToken = {
         address: discordUserId.toLowerCase(),
         timestamp: authTime,
         expiresAt: now + expirationTime
-      });
+      };
+      
+      saveToken(cacheKey, newToken);
       
       return { isValid: true, address: discordUserId.toLowerCase() };
     }
@@ -91,11 +134,13 @@ export async function validateAuth(request: NextRequest) {
       }
       
       // Store valid token in cache
-      validTokens.set(cacheKey, {
+      const newToken = {
         address: address.toLowerCase(),
         timestamp: authTime,
         expiresAt: now + expirationTime
-      });
+      };
+      
+      saveToken(cacheKey, newToken);
       
       return { isValid: true, address: address.toLowerCase() };
     } catch (error) {
@@ -116,11 +161,13 @@ export function createDevAuthToken(address: string): string {
   
   // Add to valid tokens
   const cacheKey = `${address.toLowerCase()}:${timestamp}:${devSignature.substring(0, 10)}`;
-  validTokens.set(cacheKey, {
+  const newToken = {
     address: address.toLowerCase(),
     timestamp: parseInt(timestamp),
     expiresAt: Date.now() + 30 * 60 * 1000 // 30 minutes
-  });
+  };
+  
+  saveToken(cacheKey, newToken);
   
   return `Bearer ${address}:${timestamp}:${devSignature}`;
 }

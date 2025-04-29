@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fetchDiscordUser, fetchUserGuildRoles, DiscordAPIError } from '@/lib/discord-api';
 import { determineUserLeagues, getPrimaryLeague } from '@/lib/discord-roles';
 
+// 서버 측 API 요청 추적 - 중복 요청 방지
+const requestCounts: Record<string, number> = {};
+const lastRequestTimes: Record<string, number> = {};
+
+// 요청 제한 설정
+const MIN_REQUEST_INTERVAL = 5000; // 같은 토큰으로 5초 안에 재요청 방지
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
@@ -17,6 +24,7 @@ export async function GET(request: NextRequest) {
     }
     
     const token = authHeader.substring(7);
+    const tokenKey = token.substring(0, 20); // 토큰 식별자
 
     if (!token) {
       return NextResponse.json(
@@ -24,6 +32,53 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+    
+    // 중복 요청 체크 및 API 요청 속도 제한
+    const now = Date.now();
+    const lastRequestTime = lastRequestTimes[tokenKey] || 0;
+    
+    // 너무 빠른 속도로 연속 호출되는 경우
+    if (now - lastRequestTime < MIN_REQUEST_INTERVAL) {
+      requestCounts[tokenKey] = (requestCounts[tokenKey] || 0) + 1;
+      
+      // 연속 요청이 너무 많으면 속도 제한 응답
+      if (requestCounts[tokenKey] > 3) {
+        const waitSeconds = Math.ceil(MIN_REQUEST_INTERVAL / 1000);
+        console.log(`Rate limiting user request, too many requests in short time`);
+        
+        return NextResponse.json(
+          { 
+            error: `Too many requests. Please wait ${waitSeconds} seconds.`,
+            code: 'TOO_MANY_REQUESTS'
+          },
+          { 
+            status: 429,
+            headers: {
+              'Retry-After': `${waitSeconds}`
+            }
+          }
+        );
+      }
+      
+      // 캐시 헤더 추가하여 응답 재사용 유도
+      console.log('Recent request detected, returning cached response');
+      return NextResponse.json(
+        { 
+          message: 'Please use cached response',
+          cacheTime: lastRequestTime
+        },
+        { 
+          status: 200,
+          headers: {
+            'Cache-Control': 'max-age=5',
+          }
+        }
+      );
+    }
+    
+    // 토큰으로 첫 요청이거나 충분한 시간이 경과한 경우 카운트 초기화
+    requestCounts[tokenKey] = 0;
+    lastRequestTimes[tokenKey] = now;
     
     console.log('Fetching Discord user info with token');
     
@@ -56,7 +111,11 @@ export async function GET(request: NextRequest) {
       primaryLeague,
     };
     
-    return NextResponse.json(responseData);
+    return NextResponse.json(responseData, {
+      headers: {
+        'Cache-Control': 'private, max-age=300', // 5분간 캐시 허용
+      }
+    });
     
   } catch (error) {
     console.error('Error processing user request:', error);

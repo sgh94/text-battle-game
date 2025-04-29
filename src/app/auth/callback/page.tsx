@@ -2,7 +2,6 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 
 // Auth status type
 type AuthStatus = 'processing' | 'connecting' | 'success' | 'error';
@@ -30,7 +29,10 @@ function DiscordCallbackInner() {
     const handleCallback = async () => {
       try {
         const code = searchParams.get('code');
+        const state = searchParams.get('state');
         const error = searchParams.get('error');
+        const storedState = localStorage.getItem('discord_auth_state');
+        const codeVerifier = localStorage.getItem('discord_code_verifier');
 
         // If the user canceled authentication
         if (error) {
@@ -44,16 +46,30 @@ function DiscordCallbackInner() {
         if (!code) {
           throw new Error('No authorization code provided');
         }
+        
+        // Verify state parameter to prevent CSRF attacks
+        if (!state || !storedState || state !== storedState) {
+          throw new Error('Invalid state parameter. Authentication request may have been tampered with.');
+        }
 
         setStatus('connecting');
+        console.log('Processing callback with code:', code.substring(0, 10) + '...');
+        console.log('State match:', state === storedState);
+        console.log('Code verifier:', codeVerifier ? `present (${codeVerifier.length} chars)` : 'missing');
 
-        // Send the auth code to the Discord API
-        const response = await fetch('/api/discord/auth', {
+        // Clean up localStorage state
+        localStorage.removeItem('discord_auth_state');
+        
+        // Use our API endpoint to handle the token exchange
+        const response = await fetch('/api/auth/token', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({ 
+            code,
+            codeVerifier 
+          }),
         });
 
         // Handle response
@@ -62,12 +78,35 @@ function DiscordCallbackInner() {
           throw new Error(errorData.error || `Failed to authenticate with Discord (${response.status})`);
         }
 
-        // Extract and save user data
-        const userData: DiscordUser = await response.json();
-        setUser(userData);
+        const tokenData = await response.json();
+        console.log('Token exchange successful');
 
-        // Save user data to local storage
-        localStorage.setItem('text-battle-discord-auth', JSON.stringify(userData));
+        // Now fetch user info with the token
+        const userResponse = await fetch('/api/auth/user', {
+          headers: {
+            'Authorization': `Bearer ${tokenData.access_token}`,
+          },
+        });
+
+        if (!userResponse.ok) {
+          throw new Error('Failed to fetch user data');
+        }
+
+        // Store the token in localStorage
+        localStorage.setItem('discord_access_token', tokenData.access_token);
+        localStorage.setItem('discord_refresh_token', tokenData.refresh_token);
+        
+        // Calculate when the token expires
+        const expiresAt = Date.now() + tokenData.expires_in * 1000;
+        localStorage.setItem('discord_expires_at', expiresAt.toString());
+        
+        // We no longer need the code verifier
+        localStorage.removeItem('discord_code_verifier');
+
+        // Extract user data
+        const userData = await userResponse.json();
+        setUser(userData);
+        console.log('User data retrieved successfully');
 
         // Set success status
         setStatus('success');

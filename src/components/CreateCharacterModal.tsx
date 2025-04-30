@@ -58,7 +58,7 @@ export function CreateCharacterModal({
         
         // If the initially selected league already has a character, show error
         if (selectedLeague && leagues.includes(selectedLeague)) {
-          setError(`You already have a character in the ${getLeagueInfo(selectedLeague).name} league.`);
+          setError(`You already have a hero in the ${getLeagueInfo(selectedLeague).name} league.`);
         } else {
           setError('');
         }
@@ -83,7 +83,7 @@ export function CreateCharacterModal({
 
     // Check if user already has a character in this league
     if (leaguesWithCharacters.includes(selectedLeague)) {
-      setError(`You already have a character in the ${getLeagueInfo(selectedLeague).name} league. Only one character per league is allowed.`);
+      setError(`You already have a hero in the ${getLeagueInfo(selectedLeague).name} league. Only one hero per league is allowed.`);
       return;
     }
 
@@ -122,13 +122,13 @@ export function CreateCharacterModal({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create character');
+        throw new Error(data.error || 'Failed to create hero');
       }
 
-      console.log('Character created successfully:', data);
+      console.log('Hero created successfully:', data);
       onSuccess();
     } catch (error: any) {
-      console.error('Error creating character:', error);
+      console.error('Error creating hero:', error);
       setError(error.message || 'An error occurred');
     } finally {
       setIsSubmitting(false);
@@ -145,7 +145,7 @@ export function CreateCharacterModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">Create Character</h2>
+        <h2 className="text-xl font-bold mb-4">Customize Your Hero</h2>
 
         {availableLeagues.length === 0 ? (
           <div className="bg-red-900/30 border border-red-500 p-4 rounded-lg mb-4">
@@ -156,14 +156,14 @@ export function CreateCharacterModal({
         ) : noAvailableLeagues ? (
           <div className="bg-yellow-900/30 border border-yellow-500 p-4 rounded-lg mb-4">
             <p className="mb-2 font-bold">All Leagues Filled</p>
-            <p>You already have characters in all available leagues.</p>
-            <p className="mt-2 text-sm">Each player can have only one character per league.</p>
+            <p>You already have heroes in all available leagues.</p>
+            <p className="mt-2 text-sm">Each player can have only one hero per league.</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
               <label htmlFor="name" className="block text-sm font-medium mb-1">
-                Character Name
+                Hero Name
               </label>
               <input
                 type="text"
@@ -171,13 +171,13 @@ export function CreateCharacterModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Enter character name"
+                placeholder="Enter hero name"
               />
             </div>
 
             <div className="mb-4">
               <label htmlFor="traits" className="block text-sm font-medium mb-1">
-                Character Traits
+                Hero Descriptions
               </label>
               <textarea
                 id="traits"
@@ -185,7 +185,7 @@ export function CreateCharacterModal({
                 onChange={(e) => setTraits(e.target.value)}
                 rows={4}
                 className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Describe your character's traits, abilities, and personality"
+                placeholder="Describe traits, abilities, and personality of your hero"
               />
             </div>
 
@@ -246,7 +246,7 @@ export function CreateCharacterModal({
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 )}
-                Create
+                Summon
               </button>
             </div>
           </form>

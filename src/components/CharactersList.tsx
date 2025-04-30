@@ -50,7 +50,7 @@ export function CharactersList() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Characters fetched:', data.characters);
+        console.log('Heroes fetched:', data.characters);
         const fetchedCharacters = data.characters || [];
         setCharacters(fetchedCharacters);
 
@@ -73,10 +73,10 @@ export function CharactersList() {
 
         setLeagueCharacters(charactersByLeague);
       } else {
-        console.error('Failed to fetch characters:', await response.text());
+        console.error('Failed to fetch heroes:', await response.text());
       }
     } catch (error) {
-      console.error('Error fetching characters:', error);
+      console.error('Error fetching heroes:', error);
     } finally {
       setIsLoading(false);
     }
@@ -121,7 +121,7 @@ export function CharactersList() {
         </div>
       ) : characters.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <p>No heroes yet. Create your first hero in one of your available leagues!</p>
+          <p>No heroes yet. Summon your first hero in one of your available leagues!</p>
 
           {/* Display available leagues */}
           {user?.leagues && user.leagues.length > 0 ? (

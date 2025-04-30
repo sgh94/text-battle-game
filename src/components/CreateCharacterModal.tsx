@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 import { getLeagueInfo } from '@/lib/discord-roles';
 
+// Constants for input limits
+const NAME_MAX_LENGTH = 200;
+const TRAITS_MAX_LENGTH = 500;
+
 interface CreateCharacterModalProps {
   onClose: () => void;
   onSuccess: () => void;
@@ -65,6 +69,22 @@ export function CreateCharacterModal({
       }
     } catch (error) {
       console.error('Error checking existing characters:', error);
+    }
+  };
+
+  // Handle name input with length limit
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value.length <= NAME_MAX_LENGTH) {
+      setName(value);
+    }
+  };
+
+  // Handle traits input with length limit
+  const handleTraitsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (value.length <= TRAITS_MAX_LENGTH) {
+      setTraits(value);
     }
   };
 
@@ -163,13 +183,14 @@ export function CreateCharacterModal({
           <form onSubmit={handleSubmit}>
             <div className="mb-4">
               <label htmlFor="name" className="block text-sm font-medium mb-1">
-                Hero Name
+                Hero Name <span className="text-gray-400 text-xs">({name.length}/{NAME_MAX_LENGTH})</span>
               </label>
               <input
                 type="text"
                 id="name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={handleNameChange}
+                maxLength={NAME_MAX_LENGTH}
                 className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Enter hero name"
               />
@@ -177,16 +198,22 @@ export function CreateCharacterModal({
 
             <div className="mb-4">
               <label htmlFor="traits" className="block text-sm font-medium mb-1">
-                Hero Descriptions
+                Hero Descriptions <span className="text-gray-400 text-xs">({traits.length}/{TRAITS_MAX_LENGTH})</span>
               </label>
               <textarea
                 id="traits"
                 value={traits}
-                onChange={(e) => setTraits(e.target.value)}
+                onChange={handleTraitsChange}
+                maxLength={TRAITS_MAX_LENGTH}
                 rows={4}
                 className="w-full bg-gray-700 rounded-md border border-gray-600 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Describe traits, abilities, and personality of your hero"
               />
+              {traits.length >= TRAITS_MAX_LENGTH * 0.9 && (
+                <p className="text-yellow-500 text-xs mt-1">
+                  You're approaching the maximum character limit.
+                </p>
+              )}
             </div>
 
             <div className="mb-6">

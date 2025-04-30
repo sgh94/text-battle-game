@@ -103,7 +103,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       const response = await fetch(`/api/character/${encodeURIComponent(id)}`);
 
       if (!response.ok) {
-        throw new Error('Failed to fetch character');
+        throw new Error('Failed to fetch hero');
       }
 
       const data = await response.json();
@@ -189,7 +189,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         throw new Error(data.error || 'Battle failed');
       }
 
-      // Update character with new ELO
+      // Update character with new Fame Points
       if (data.updatedStats) {
         if (data.battle.winner === character.id) {
           setCharacter(data.updatedStats.winner);
@@ -221,7 +221,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   const deleteCharacter = async () => {
     if (!user?.id || !character || isDeleting) return;
 
-    if (!confirm('Are you sure you want to delete this character? This action cannot be undone.')) {
+    if (!confirm('Once deleted, this character cannot be recovered. Are you sure you want to proceed?')) {
       return;
     }
 
@@ -238,14 +238,14 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete character');
+        throw new Error(errorData.error || 'Failed to delete hero');
       }
 
       // Redirect to the home page after successful deletion
       router.push('/');
     } catch (error: any) {
       console.error('Delete error:', error);
-      alert(error.message || 'Failed to delete character');
+      alert(error.message || 'Failed to delete hero');
       setIsDeleting(false);
     }
   };
@@ -288,21 +288,21 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         if (response.status === 429 && data.remainingSeconds) {
           startTraitUpdateTimer(data.remainingSeconds);
         }
-        throw new Error(data.error || 'Failed to update traits');
+        throw new Error(data.error || 'Failed to update hero');
       }
 
-      // Update character with new traits and ELO
+      // Update character with new traits and Fame Points
       setCharacter(data.character);
       setIsEditingTraits(false);
       
       // Start cooldown
       startTraitUpdateTimer(6 * 60 * 60); // 6 hours
       
-      // Show confirmation with ELO reduction
-      alert(`Traits updated! Your ELO has been reduced from ${data.previousElo} to ${data.newElo} (${data.eloReduction} points penalty).`);
+      // Show confirmation with Fame Points reduction
+      alert(`Hero updated! Your Fame Points have been reduced from ${data.previousElo} to ${data.newElo} (${data.eloReduction} points penalty).`);
     } catch (error: any) {
-      console.error('Trait update error:', error);
-      alert(error.message || 'Failed to update traits');
+      console.error('Hero update error:', error);
+      alert(error.message || 'Failed to update hero');
     }
   };
 
@@ -325,7 +325,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   if (error || !character) {
     return (
       <div className="bg-red-900/30 border border-red-500 p-4 rounded-lg">
-        <p>{error || 'Character not found'}</p>
+        <p>{error || 'Hero not found'}</p>
         <Link href="/" className="text-blue-400 hover:underline mt-2 inline-block">
           Return to Home
         </Link>
@@ -339,14 +339,14 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
   return (
     <div>
       <div className="mb-4">
-        <Link href="/" className="text-blue-400 hover:underline">&larr; Back to My Characters</Link>
+        <Link href="/" className="text-blue-400 hover:underline">&larr; Go Back</Link>
       </div>
 
       <div className="bg-gray-800 rounded-lg p-6 mb-6">
         <div className="flex justify-between items-start mb-4">
           <h2 className="text-2xl font-bold">{character.name}</h2>
           <div className="text-right">
-            <div className="text-xl font-bold">{character.elo} Elo</div>
+            <div className="text-xl font-bold">{character.elo} Fame Points</div>
             <div className="text-sm text-gray-400">
               {character.wins}W {character.losses}L {character.draws}D
             </div>
@@ -354,7 +354,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
         </div>
 
         <div className="mb-6">
-          <h3 className="text-gray-400 mb-2">Traits</h3>
+          <h3 className="text-gray-400 mb-2">Descriptions</h3>
           
           {isEditingTraits ? (
             <div>
@@ -363,7 +363,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                 value={newTraits}
                 onChange={(e) => setNewTraits(e.target.value)}
                 className="w-full h-40 p-2 bg-gray-700 text-white rounded-md mb-2"
-                placeholder="Enter character traits..."
+                placeholder="Enter hero traits..."
               />
               <div className="flex gap-2">
                 <button
@@ -376,7 +376,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                   onClick={confirmTraitUpdate}
                   className="py-2 px-4 rounded-md bg-indigo-600 hover:bg-indigo-700"
                 >
-                  Update Traits
+                  Apply
                 </button>
               </div>
             </div>
@@ -394,9 +394,9 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                   }`}
                 >
                   {traitUpdateCooldown !== null ? (
-                    `Cooldown: ${formatCooldownTime(traitUpdateCooldown)}`
+                    `Edit Cooldown: ${formatCooldownTime(traitUpdateCooldown)}`
                   ) : (
-                    'Edit Traits'
+                    'Edit Hero'
                   )}
                 </button>
               )}
@@ -442,7 +442,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                   삭제 중...
                 </div>
               ) : (
-                'Delete Character'
+                'Fire Hero'
               )}
             </button>
           </div>
@@ -466,13 +466,13 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       {showTraitWarning && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4 text-red-400">Warning: ELO Penalty</h3>
+            <h3 className="text-xl font-bold mb-4 text-red-400">Warning: Fame Points Penalty</h3>
             <p className="mb-4">
-              Updating your character's traits will result in a <span className="font-bold text-red-400">25% ELO reduction</span>.
-              Your current ELO is {character.elo}, which means you will lose {Math.round(character.elo * 0.25)} points.
+              Editing your hero's descriptions will result in a <span className="font-bold text-red-400">25% reduction of your total Fame Points</span>.
+              Your current Fame Points are {character.elo}, so you will lose {Math.round(character.elo * 0.25)} Fame Points upon confirmation.
             </p>
             <p className="mb-6">
-              Additionally, you won't be able to update traits again for <span className="font-bold">6 hours</span>.
+              Additionally, a 6-hour edit cooldown applies until you can edit this hero again.
             </p>
             <div className="flex gap-3 justify-end">
               <button

@@ -189,7 +189,7 @@ export function RankingList() {
           <p>No rankings available for {getLeagueInfo(selectedLeague).name}</p>
           {user && user.leagues && user.leagues.includes(selectedLeague) && (
             <p className="mt-2 text-gray-400">
-              Create a hero in this league to be the first on the leaderboard!
+              Summon a hero in this league to be the first on the leaderboard!
             </p>
           )}
         </div>
@@ -200,7 +200,7 @@ export function RankingList() {
             <span className="text-xl mr-2">{getLeagueInfo(selectedLeague).icon}</span>
             <span className="font-bold">{getLeagueInfo(selectedLeague).name}</span>
             <span className="ml-auto text-xs text-gray-500">
-              {rankings.length} characters
+              {rankings.length} heroes
             </span>
           </div>
           

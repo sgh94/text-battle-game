@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useDiscordAuth } from '@/hooks/useDiscordAuth';
 
+// Constants for input limits (same as in CreateCharacterModal for consistency)
+const TRAITS_MAX_LENGTH = 500;
+
 interface Character {
   id: string;
   name: string;
@@ -263,6 +266,14 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
     }
   };
 
+  // Handle traits input with length limit
+  const handleTraitsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    if (value.length <= TRAITS_MAX_LENGTH) {
+      setNewTraits(value);
+    }
+  };
+
   // Add function to handle traits update
   const updateTraits = async () => {
     if (!user?.id || !character) return;
@@ -358,10 +369,20 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
           
           {isEditingTraits ? (
             <div>
+              <div className="mb-2">
+                <label htmlFor="traits" className="text-sm text-gray-400">
+                  <span className="mr-2">Character limit:</span>
+                  <span className={newTraits.length >= TRAITS_MAX_LENGTH * 0.9 ? "text-yellow-500" : "text-gray-400"}>
+                    {newTraits.length}/{TRAITS_MAX_LENGTH}
+                  </span>
+                </label>
+              </div>
               <textarea
                 ref={textareaRef}
+                id="traits"
                 value={newTraits}
-                onChange={(e) => setNewTraits(e.target.value)}
+                onChange={handleTraitsChange}
+                maxLength={TRAITS_MAX_LENGTH}
                 className="w-full h-40 p-2 bg-gray-700 text-white rounded-md mb-2"
                 placeholder="Enter hero traits..."
               />

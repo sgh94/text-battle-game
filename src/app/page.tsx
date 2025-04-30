@@ -13,7 +13,7 @@ export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const { isConnected, isConnecting, user, error } = useDiscordAuth();
   const [loginChecked, setLoginChecked] = useState(false);
-  // 라우터 리프레시 추적을 위한 ref (반복 호출 방지)
+  // Ref to track router refresh (prevent repeated calls)
   const refreshedRef = useRef(false);
 
   // This ensures hydration issues are avoided
@@ -26,7 +26,7 @@ export default function Home() {
     };
 
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    
+
     return () => {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
@@ -51,13 +51,13 @@ export default function Home() {
 
   // Force router update only on login/logout
   useEffect(() => {
-    // 사용자가 로그인하거나 로그아웃할 때만 UI 리프레시하고, 한 번만 실행
+    // Refresh UI only when user logs in or out, and only once
     if (user && !refreshedRef.current) {
       refreshedRef.current = true;
-      // 사용자 정보 변경 시 단 한 번만 리프레시
+      // Refresh only once when user info changes
       router.refresh();
     } else if (!user && refreshedRef.current) {
-      // 로그아웃 시 리프레시 상태 초기화
+      // Reset refresh state on logout
       refreshedRef.current = false;
     }
   }, [user, router]);
@@ -91,7 +91,7 @@ export default function Home() {
       {error && (
         <div className="w-full max-w-2xl mb-4">
           <div className="bg-red-900/30 border border-red-700 text-red-200 px-4 py-3 rounded-md">
-            <p className="font-medium">로그인 중 문제가 발생했습니다</p>
+            <p className="font-medium">A problem occurred during login</p>
             <p className="text-sm">{error}</p>
           </div>
         </div>
@@ -110,14 +110,14 @@ export default function Home() {
         {isConnecting ? (
           <div className="flex justify-center items-center p-8">
             <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
-            <span className="ml-3 text-gray-400">디스코드 연결 중...</span>
+            <span className="ml-3 text-gray-400">Entering the arena...</span>
           </div>
         ) : (
           <CharactersList />
         )}
-        
+
         {isConnected && <LeagueSelector />}
-        
+
         {!isConnected && !isConnecting && (
           <div className="mt-8 bg-gray-800 rounded-lg p-6 text-center">
             <h2 className="text-xl font-bold mb-2">Connect to Play</h2>
@@ -128,14 +128,14 @@ export default function Home() {
         )}
       </div>
 
-      {/* 개발 모드일 때만 디버깅 정보 표시 */}
+      {/* Display debugging info only in development mode */}
       {process.env.NODE_ENV === 'development' && (
         <div className="fixed bottom-4 right-4 flex flex-col gap-2 text-xs bg-gray-800 p-2 rounded shadow">
           <div>
-            <div>연결 상태: {isConnected ? '연결됨' : '연결되지 않음'}</div>
-            <div>연결 중: {isConnecting ? '예' : '아니오'}</div>
+            <div>Connection status: {isConnected ? 'Connected' : 'Not connected'}</div>
+            <div>Connecting: {isConnecting ? 'Yes' : 'No'}</div>
             {isClient && (
-              <div>토큰 존재: {localStorage.getItem('discord_access_token') ? '예' : '아니오'}</div>
+              <div>Token exists: {localStorage.getItem('discord_access_token') ? 'Yes' : 'No'}</div>
             )}
           </div>
           <button

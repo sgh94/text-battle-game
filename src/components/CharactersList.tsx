@@ -142,7 +142,7 @@ export function CharactersList() {
                       onClick={() => handleCreateButtonClick(league)}
                       className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white text-sm"
                     >
-                      Create Hero in {leagueInfo.name}
+                      Summon Hero in {leagueInfo.name}
                     </button>
                   </div>
                 );
@@ -195,7 +195,7 @@ export function CharactersList() {
                         onClick={() => handleCreateButtonClick(league)}
                         className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white text-sm"
                       >
-                        Create Hero
+                        Summon Hero
                       </button>
                     </div>
                   )}

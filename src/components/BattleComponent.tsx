@@ -222,7 +222,7 @@ export function BattleComponent() {
                   Battle in progress...
                 </div>
               ) : cooldown !== null ? (
-                `Cooldown... ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')}`
+                `Battle Cooldown... ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')}`
               ) : (
                 'Start Battle'
               )}

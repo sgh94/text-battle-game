@@ -172,9 +172,9 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user.id}:${Date.now()}:discord_auth_${user.id}`
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           characterId: id,
-          userId: user.id 
+          userId: user.id
         }),
       });
 
@@ -281,15 +281,15 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
     try {
       // First close the warning modal
       setShowTraitWarning(false);
-      
+
       const response = await fetch(`/api/character/${encodeURIComponent(id)}/update-traits`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user.id}:${Date.now()}:discord_auth_${user.id}`
         },
-        body: JSON.stringify({ 
-          traits: newTraits 
+        body: JSON.stringify({
+          traits: newTraits
         }),
       });
 
@@ -305,10 +305,10 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
       // Update character with new traits and Fame Points
       setCharacter(data.character);
       setIsEditingTraits(false);
-      
+
       // Start cooldown
       startTraitUpdateTimer(6 * 60 * 60); // 6 hours
-      
+
       // Show confirmation with Fame Points reduction
       alert(`Hero updated! Your Fame Points have been reduced from ${data.previousElo} to ${data.newElo} (${data.eloReduction} points penalty).`);
     } catch (error: any) {
@@ -366,7 +366,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
 
         <div className="mb-6">
           <h3 className="text-gray-400 mb-2">Descriptions</h3>
-          
+
           {isEditingTraits ? (
             <div>
               <div className="mb-2">
@@ -408,11 +408,10 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                 <button
                   onClick={startEditingTraits}
                   disabled={traitUpdateCooldown !== null}
-                  className={`py-2 px-4 rounded-md text-sm ${
-                    traitUpdateCooldown !== null
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-indigo-600 hover:bg-indigo-700'
-                  }`}
+                  className={`py-2 px-4 rounded-md text-sm ${traitUpdateCooldown !== null
+                    ? 'bg-gray-600 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                    }`}
                 >
                   {traitUpdateCooldown !== null ? (
                     `Edit Cooldown: ${formatCooldownTime(traitUpdateCooldown)}`
@@ -443,7 +442,7 @@ export function CharacterDetail({ id }: CharacterDetailProps) {
                   Battle in progress...
                 </div>
               ) : cooldown !== null ? (
-                `Cooldown... ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')}`
+                `Battle Cooldown... ${Math.floor(cooldown / 60)}:${(cooldown % 60).toString().padStart(2, '0')}`
               ) : (
                 'Start Battle'
               )}

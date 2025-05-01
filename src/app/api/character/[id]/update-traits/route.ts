@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Character } from '@/types';
 import { validateAuth } from '@/lib/auth';
 
+// Constants for input limits
+const TRAITS_MAX_LENGTH = 500;
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -35,6 +38,13 @@ export async function POST(
     const { traits } = await request.json();
     if (!traits || typeof traits !== 'string' || traits.trim() === '') {
       return NextResponse.json({ error: 'Valid traits are required' }, { status: 400 });
+    }
+
+    // Validate trait length
+    if (traits.length > TRAITS_MAX_LENGTH) {
+      return NextResponse.json({ 
+        error: `Traits must be ${TRAITS_MAX_LENGTH} characters or less (current: ${traits.length})` 
+      }, { status: 400 });
     }
 
     // Check cooldown (6 hours between trait updates)

@@ -27,10 +27,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-// 정확한 리다이렉트 URI - Discord 개발자 포털에 등록된 URI와 일치해야 함
 const REDIRECT_URI = typeof window !== 'undefined' && window.location.hostname === 'localhost'
   ? 'http://localhost:3000/auth/callback'
-  : 'https://character-battle-game.vercel.app/auth/callback';
+  : 'https://mitosis-text-hero-battle-arena.vercel.app/auth/callback';
 
 // Create exponential backoff mechanism
 const createBackoffDelay = (retryCount: number, baseDelay = 1000, maxDelay = 10000) => {

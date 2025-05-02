@@ -11,14 +11,14 @@ export const fetchLeagueLeaderboard = async (leagueId, userId = null) => {
     if (!leagueInfo) {
       throw new Error(`Invalid league: ${leagueId}`);
     }
-    
+
     // Get top 10 players in the league
     const topPlayersSnapshot = await db.collection('characters')
       .where('league', '==', leagueId)
       .orderBy('rating', 'desc')
       .limit(10)
       .get();
-    
+
     const topPlayers = [];
     topPlayersSnapshot.forEach((doc, index) => {
       const character = doc.data();
@@ -30,20 +30,20 @@ export const fetchLeagueLeaderboard = async (leagueId, userId = null) => {
         wins: character.wins || 0,
         losses: character.losses || 0,
         draws: character.draws || 0,
-        winRate: character.matchesPlayed > 0 
-          ? ((character.wins / character.matchesPlayed) * 100).toFixed(1) + '%' 
+        winRate: character.matchesPlayed > 0
+          ? ((character.wins / character.matchesPlayed) * 100).toFixed(1) + '%'
           : '0.0%',
         createdBy: character.createdBy || 'Unknown Player',
         avatar: character.avatar,
       });
     });
-    
+
     // If userId is provided, get the user's ranking
     let userRanking = null;
     if (userId) {
       // Get user's character
       const userCharacter = await getUserCharacter(userId);
-      
+
       if (userCharacter && userCharacter.league === leagueId) {
         // Count how many players have a higher rating
         const higherRankedCount = await db.collection('characters')
@@ -51,9 +51,9 @@ export const fetchLeagueLeaderboard = async (leagueId, userId = null) => {
           .where('rating', '>', userCharacter.rating)
           .get()
           .then(snapshot => snapshot.size);
-        
+
         const userRank = higherRankedCount + 1;
-        
+
         userRanking = {
           rank: userRank,
           id: userId,
@@ -62,29 +62,29 @@ export const fetchLeagueLeaderboard = async (leagueId, userId = null) => {
           wins: userCharacter.wins || 0,
           losses: userCharacter.losses || 0,
           draws: userCharacter.draws || 0,
-          winRate: userCharacter.matchesPlayed > 0 
-            ? ((userCharacter.wins / userCharacter.matchesPlayed) * 100).toFixed(1) + '%' 
+          winRate: userCharacter.matchesPlayed > 0
+            ? ((userCharacter.wins / userCharacter.matchesPlayed) * 100).toFixed(1) + '%'
             : '0.0%',
           createdBy: userCharacter.createdBy || 'Unknown Player',
           avatar: userCharacter.avatar,
         };
-        
+
         // Check if user is already in top 10
         const isInTop10 = topPlayers.some(player => player.id === userId);
-        
+
         if (!isInTop10 && userRank > 10) {
           // User is not in top 10, we'll add them separately
           // We don't add them to topPlayers to keep it strictly top 10
         }
       }
     }
-    
+
     // Get total player count for the league
     const totalPlayersCount = await db.collection('characters')
       .where('league', '==', leagueId)
       .get()
       .then(snapshot => snapshot.size);
-    
+
     // Get high-level league stats
     const leagueStats = {
       totalPlayers: totalPlayersCount,
@@ -92,7 +92,7 @@ export const fetchLeagueLeaderboard = async (leagueId, userId = null) => {
       averageRating: await getAverageLeagueRating(leagueId),
       recentMatches: await getRecentLeagueMatches(leagueId, 5),
     };
-    
+
     return {
       leagueInfo,
       topPlayers,
@@ -111,20 +111,20 @@ const getAverageLeagueRating = async (leagueId) => {
     const snapshot = await db.collection('characters')
       .where('league', '==', leagueId)
       .get();
-    
+
     if (snapshot.empty) {
       return 1000; // Default rating
     }
-    
+
     let totalRating = 0;
     let count = 0;
-    
+
     snapshot.forEach(doc => {
       const character = doc.data();
       totalRating += character.rating || 1000;
       count++;
     });
-    
+
     return Math.round(totalRating / count);
   } catch (error) {
     console.error('Error calculating average rating:', error);
@@ -141,7 +141,7 @@ const getRecentLeagueMatches = async (leagueId, limit = 5) => {
       .orderBy('completedAt', 'desc')
       .limit(limit)
       .get();
-    
+
     const matches = [];
     snapshot.forEach(doc => {
       const match = doc.data();
@@ -155,7 +155,7 @@ const getRecentLeagueMatches = async (leagueId, limit = 5) => {
         completedAt: match.completedAt.toDate(),
       });
     });
-    
+
     return matches;
   } catch (error) {
     console.error('Error fetching recent matches:', error);
@@ -168,9 +168,9 @@ export const fetchAllLeagueLeaderboards = async (limit = 5) => {
   try {
     // Import the league system to get all league IDs
     const { LEAGUES } = await import('./leagueSystem');
-    
+
     const results = {};
-    
+
     for (const leagueId of Object.keys(LEAGUES)) {
       // For each league, get the top players
       const topPlayersSnapshot = await db.collection('characters')
@@ -178,7 +178,7 @@ export const fetchAllLeagueLeaderboards = async (limit = 5) => {
         .orderBy('rating', 'desc')
         .limit(limit)
         .get();
-      
+
       const topPlayers = [];
       topPlayersSnapshot.forEach((doc, index) => {
         const character = doc.data();
@@ -191,20 +191,20 @@ export const fetchAllLeagueLeaderboards = async (limit = 5) => {
           losses: character.losses || 0,
         });
       });
-      
+
       // Get total player count for the league
       const totalPlayersCount = await db.collection('characters')
         .where('league', '==', leagueId)
         .get()
         .then(snapshot => snapshot.size);
-      
+
       results[leagueId] = {
         leagueInfo: LEAGUES[leagueId],
         topPlayers,
         totalPlayers: totalPlayersCount,
       };
     }
-    
+
     return results;
   } catch (error) {
     console.error('Error fetching all leaderboards:', error);
@@ -216,15 +216,15 @@ export const fetchAllLeagueLeaderboards = async (limit = 5) => {
 export const getUserRankings = async (userId) => {
   try {
     const character = await getUserCharacter(userId);
-    
+
     if (!character) {
       return null;
     }
-    
+
     // Get user's leagues
     const leagues = character.allLeagues || [character.league];
     const results = {};
-    
+
     for (const leagueId of leagues) {
       // Count how many players have a higher rating in this league
       const higherRankedCount = await db.collection('characters')
@@ -232,13 +232,13 @@ export const getUserRankings = async (userId) => {
         .where('rating', '>', character.rating)
         .get()
         .then(snapshot => snapshot.size);
-      
+
       // Get total players in this league
       const totalPlayersCount = await db.collection('characters')
         .where('league', '==', leagueId)
         .get()
         .then(snapshot => snapshot.size);
-      
+
       results[leagueId] = {
         rank: higherRankedCount + 1,
         totalPlayers: totalPlayersCount,
@@ -248,7 +248,7 @@ export const getUserRankings = async (userId) => {
         draws: character.draws || 0,
       };
     }
-    
+
     return {
       character: {
         id: character.id,
@@ -272,16 +272,16 @@ export const getUserMatchHistory = async (userId, limit = 10) => {
       .orderBy('completedAt', 'desc')
       .limit(limit)
       .get();
-    
+
     const player2Matches = await db.collection('matches')
       .where('player2Id', '==', userId)
       .orderBy('completedAt', 'desc')
       .limit(limit)
       .get();
-    
+
     // Combine and sort matches
     const matches = [];
-    
+
     player1Matches.forEach(doc => {
       const match = doc.data();
       matches.push({
@@ -295,7 +295,7 @@ export const getUserMatchHistory = async (userId, limit = 10) => {
         league: match.league,
       });
     });
-    
+
     player2Matches.forEach(doc => {
       const match = doc.data();
       matches.push({
@@ -309,10 +309,10 @@ export const getUserMatchHistory = async (userId, limit = 10) => {
         league: match.league,
       });
     });
-    
+
     // Sort by date, most recent first
     matches.sort((a, b) => b.completedAt - a.completedAt);
-    
+
     // Trim to limit
     return matches.slice(0, limit);
   } catch (error) {
@@ -325,13 +325,13 @@ export const getUserMatchHistory = async (userId, limit = 10) => {
 export const getLeagueStandings = async (leagueId, page = 1, pageSize = 20) => {
   try {
     const offset = (page - 1) * pageSize;
-    
+
     // Get total count for pagination
     const totalCount = await db.collection('characters')
       .where('league', '==', leagueId)
       .get()
       .then(snapshot => snapshot.size);
-    
+
     // Get paginated characters
     const snapshot = await db.collection('characters')
       .where('league', '==', leagueId)
@@ -339,7 +339,7 @@ export const getLeagueStandings = async (leagueId, page = 1, pageSize = 20) => {
       .limit(pageSize)
       .offset(offset)
       .get();
-    
+
     const standings = [];
     snapshot.forEach((doc, index) => {
       const character = doc.data();
@@ -352,14 +352,14 @@ export const getLeagueStandings = async (leagueId, page = 1, pageSize = 20) => {
         losses: character.losses || 0,
         draws: character.draws || 0,
         matchesPlayed: character.matchesPlayed || 0,
-        winRate: character.matchesPlayed > 0 
-          ? ((character.wins / character.matchesPlayed) * 100).toFixed(1) + '%' 
+        winRate: character.matchesPlayed > 0
+          ? ((character.wins / character.matchesPlayed) * 100).toFixed(1) + '%'
           : '0.0%',
         createdBy: character.createdBy || 'Unknown Player',
         avatar: character.avatar,
       });
     });
-    
+
     return {
       standings,
       pagination: {

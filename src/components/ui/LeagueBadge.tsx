@@ -20,43 +20,43 @@ export default function LeagueBadge({
   variant = 'default',
   className = '',
 }: LeagueBadgeProps) {
-  // 리그 ID 정규화
+  // Normalize league ID
   const normalizedLeagueId = leagueId.toLowerCase();
-  
-  // 리그 정보 가져오기
+
+  // Get league information
   const league = LEAGUES[normalizedLeagueId as keyof typeof LEAGUES];
-  
+
   if (!league) {
     return null;
   }
-  
-  // 리그 이름
+
+  // League name
   const leagueName = league.name || leagueId.charAt(0).toUpperCase() + leagueId.slice(1);
-  
-  // 리그 색상 및 스타일
+
+  // League color and style
   const leagueColor = league.color || '#888888';
-  
-  // 배지 크기에 따른 클래스
+
+  // Classes based on badge size
   const sizeClasses = {
     sm: 'text-xs px-1.5 py-0.5',
     md: 'text-sm px-2 py-1',
     lg: 'text-base px-2.5 py-1.5',
   };
-  
-  // 배지 스타일 배리언트
+
+  // Badge style variants
   const variantClasses = {
     default: `bg-opacity-20 text-opacity-90`,
     outline: `bg-transparent border border-current`,
     filled: `text-white`,
   };
-  
-  // 배지 스타일 객체
+
+  // Badge style object
   const badgeStyle = {
     backgroundColor: variant === 'filled' ? leagueColor : variant === 'default' ? `${leagueColor}33` : 'transparent',
     color: variant === 'filled' ? 'white' : leagueColor,
     borderColor: variant === 'outline' ? leagueColor : 'transparent',
   };
-  
+
   return (
     <span
       className={`inline-flex items-center justify-center rounded-full font-medium ${sizeClasses[size]} ${className}`}
@@ -70,7 +70,7 @@ export default function LeagueBadge({
   );
 }
 
-// 모든 리그 뱃지 컴포넌트
+// All league badges component
 export function LeagueBadges({
   leagues,
   size = 'sm',
@@ -84,17 +84,17 @@ export function LeagueBadges({
   variant?: 'default' | 'outline' | 'filled';
   className?: string;
 }) {
-  // 리그 우선순위 정렬
+  // Sort leagues by priority
   const sortedLeagues = [...leagues].sort((a, b) => {
     const leagueA = LEAGUES[a as keyof typeof LEAGUES];
     const leagueB = LEAGUES[b as keyof typeof LEAGUES];
-    
+
     if (!leagueA) return 1;
     if (!leagueB) return -1;
-    
+
     return leagueB.order - leagueA.order;
   });
-  
+
   return (
     <div className={`flex flex-wrap gap-1 ${className}`}>
       {sortedLeagues.map((leagueId) => (

@@ -35,9 +35,9 @@ export default function Error({
             </svg>
           </div>
         </div>
-        <h2 className="text-2xl font-bold text-center mb-4">문제가 발생했습니다</h2>
+        <h2 className="text-2xl font-bold text-center mb-4">An issue has occurred</h2>
         <p className="text-gray-600 mb-6 text-center">
-          애플리케이션에서 오류가 발생했습니다. 다시 시도하거나 나중에 다시 방문해 주세요.
+          An error has occurred in the application. Please try again or visit later.
         </p>
         <div className="bg-gray-50 p-4 rounded-md mb-6">
           <p className="text-sm text-gray-800 font-mono">
@@ -52,7 +52,7 @@ export default function Error({
             onClick={reset}
             className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
           >
-            다시 시도
+            Try Again
           </button>
         </div>
       </div>

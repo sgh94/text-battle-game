@@ -37,20 +37,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 인증 코드를 액세스 토큰으로 교환 (PKCE 코드 검증기 포함)
+    // Exchange authorization code for access token (including PKCE code verifier)
     const tokenData = await exchangeCodeForToken(code, codeVerifier);
     console.log('Token exchange successful');
-    
+
     // CRITICAL: Immediately fetch and save user data to ensure database has user record
     try {
       // Fetch user info using the new token
       const userData = await fetchDiscordUser(tokenData.access_token);
       console.log(`Fetched user info for: ${userData.username} (${userData.id})`);
-      
+
       // Save token to database
       await saveDiscordToken(userData.id, tokenData);
       console.log(`Saved token for user ${userData.id}`);
-      
+
       // Fetch user's guild roles
       let userRoles: string[] = [];
       try {
@@ -60,11 +60,11 @@ export async function POST(request: NextRequest) {
         console.error('Error fetching guild roles:', roleError);
         // Continue with empty roles array
       }
-      
+
       // Determine leagues based on roles
       const leagues = determineUserLeagues(userRoles);
       const primaryLeague = getPrimaryLeague(leagues);
-      
+
       // Create user object for database
       const userToSave: DiscordUser = {
         id: userData.id,
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-      
+
       // Save user to database
       const saveResult = await saveDiscordUser(userToSave);
       if (saveResult) {
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       } else {
         console.error(`Failed to save user ${userData.id} to database`);
       }
-      
+
     } catch (userError) {
       console.error('Error fetching/saving user data during token exchange:', userError);
       // Continue with token response even if user data saving fails
@@ -95,13 +95,13 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Token exchange error:', error);
 
-    // Discord API 오류 처리
+    // Discord API error handling
     if (error instanceof DiscordAPIError) {
       // Special handling for rate limiting
       if (error.status === 429 && error.retryAfter) {
         return NextResponse.json(
           { error: 'Rate limited by Discord, please try again later', code: 'RATE_LIMITED' },
-          { 
+          {
             status: 429,
             headers: {
               'Retry-After': String(error.retryAfter)
@@ -119,15 +119,15 @@ export async function POST(request: NextRequest) {
     // Network error handling
     if (error instanceof TypeError && error.message.includes('fetch')) {
       return NextResponse.json(
-        { 
-          error: 'Network error when connecting to Discord. Please check your internet connection.', 
-          code: 'NETWORK_ERROR' 
+        {
+          error: 'Network error when connecting to Discord. Please check your internet connection.',
+          code: 'NETWORK_ERROR'
         },
         { status: 503 }
       );
     }
 
-    // 기타 오류 처리
+    // Other error handling
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Failed to exchange token',

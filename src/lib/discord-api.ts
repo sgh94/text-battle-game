@@ -1,4 +1,4 @@
-// Discord API 통신 및 토큰 관리 모듈
+// Discord API communication and token management module
 
 import {
   getDiscordToken,
@@ -7,12 +7,12 @@ import {
   DiscordToken
 } from './db';
 
-// Discord API 설정
+// Discord API configuration
 const DISCORD_API_URL = 'https://discord.com/api/v10';
 // Use a fallback client ID in case the environment variable is not set
 const CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1088729716317495367';
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-// 리다이렉트 URI - Discord 개발자 포털에 등록된 것과 정확히 일치해야 함
+// Redirect URI - Must exactly match the one registered in the Discord Developer Portal
 const REDIRECT_URI = process.env.NODE_ENV === 'development'
   ? 'http://localhost:3000/auth/callback'
   : (process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://character-battle-game.vercel.app/auth/callback');
@@ -22,12 +22,12 @@ const GUILD_ID = process.env.DISCORD_GUILD_ID;
 // Global refresh token lock to prevent concurrent refresh attempts
 const refreshingTokens = new Set<string>();
 
-// 전역 요청 제한 관리를 위한 간단한 캐시
+// Simple cache for global request rate limit management
 const rateLimitCache = {
   lastRequestTime: 0,
-  minDelay: 250, // 최소 250ms 간격으로 요청 (Discord 권장)
+  minDelay: 250, // Minimum 250ms interval between requests (Discord recommended)
 
-  // 요청 간 딜레이 보장
+  // Ensure delay between requests
   async enforceDelay() {
     const now = Date.now();
     const timeSinceLastRequest = now - this.lastRequestTime;
@@ -41,7 +41,7 @@ const rateLimitCache = {
   }
 };
 
-// Discord API 오류 타입
+// Discord API error type
 export class DiscordAPIError extends Error {
   status: number;
   code: string;
@@ -56,7 +56,7 @@ export class DiscordAPIError extends Error {
   }
 }
 
-// Discord 사용자 정보 타입
+// Discord user information type
 export interface DiscordUserData {
   id: string;
   username: string;
@@ -73,7 +73,7 @@ export interface DiscordUserData {
   public_flags?: number;
 }
 
-// Discord 길드 멤버 정보 타입
+// Discord guild member information type
 export interface DiscordGuildMember {
   user?: DiscordUserData;
   nick?: string | null;
@@ -86,18 +86,18 @@ export interface DiscordGuildMember {
   permissions?: string;
 }
 
-// 재시도 로직을 포함한 API 요청 헬퍼
+// API request helper with retry logic
 async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
   let retries = 0;
 
   while (retries < maxRetries) {
     try {
-      // 요청 간 딜레이 적용
+      // Apply delay between requests
       await rateLimitCache.enforceDelay();
 
       const response = await fetch(url, options);
 
-      // 429 (요청 제한) 대응
+      // Handle 429 (rate limit) response
       if (response.status === 429) {
         const retryAfter = parseInt(response.headers.get('Retry-After') || '1', 10);
         const waitTime = retryAfter * 1000 || 1000;
@@ -119,14 +119,14 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 
       return response;
     } catch (error) {
-      // 네트워크 오류 등에 대한 재시도
+      // Retry for network errors
       console.error(`API call failed (attempt ${retries + 1}/${maxRetries}):`, error);
 
       if (retries === maxRetries - 1) {
         throw error;
       }
 
-      // 지수 백오프 적용 (각 재시도마다 대기 시간 증가)
+      // Apply exponential backoff (increasing wait time with each retry)
       const waitTime = Math.pow(2, retries) * 1000;
       await new Promise(resolve => setTimeout(resolve, waitTime));
       retries++;
@@ -136,7 +136,7 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
   throw new Error(`Failed after ${maxRetries} retries`);
 }
 
-// 인증 코드를 토큰으로 교환
+// Exchange authorization code for token
 export async function exchangeCodeForToken(code: string, code_verifier?: string): Promise<DiscordToken> {
   if (!CLIENT_ID) {
     throw new Error('Discord client ID not configured');
@@ -146,7 +146,7 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
     throw new Error('Discord client secret not configured');
   }
 
-  // 기본 파라미터
+  // Basic parameters
   const params: Record<string, string> = {
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
@@ -155,7 +155,7 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
     redirect_uri: REDIRECT_URI,
   };
 
-  // PKCE로 인증하는 경우 code_verifier 추가
+  // Add code_verifier if authenticating with PKCE
   if (code_verifier) {
     params.code_verifier = code_verifier;
   }
@@ -188,7 +188,7 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
         console.error('Failed to parse Discord API error response');
       }
 
-      // 재시도 정보 추출
+      // Extract retry information
       const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
 
       throw new DiscordAPIError(
@@ -201,7 +201,7 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
 
     const data = await response.json();
 
-    // 만료 시간 계산
+    // Calculate expiration time
     const expiresAt = Date.now() + data.expires_in * 1000;
 
     return {
@@ -225,7 +225,7 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
   }
 }
 
-// 토큰 갱신
+// Refresh token
 export async function refreshToken(userId: string, refreshToken: string): Promise<DiscordToken> {
   if (!CLIENT_ID || !CLIENT_SECRET) {
     throw new Error('Discord client credentials not configured');
@@ -236,11 +236,11 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
     // Wait a bit and check if a new token is available
     await new Promise(resolve => setTimeout(resolve, 2000));
     const existingToken = await getDiscordToken(userId);
-    
+
     if (existingToken && isTokenValid(existingToken)) {
       return existingToken;
     }
-    
+
     // If still not valid, throw an error to prevent infinite loops
     throw new DiscordAPIError(
       'Token refresh already in progress but not completed',
@@ -248,10 +248,10 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
       'TOKEN_REFRESH_CONFLICT'
     );
   }
-  
+
   // Add to the refreshing set to prevent concurrent refreshes
   refreshingTokens.add(userId);
-  
+
   try {
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
@@ -279,7 +279,7 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
 
     const data = await response.json();
 
-    // 만료 시간 계산
+    // Calculate expiration time
     const expiresAt = Date.now() + data.expires_in * 1000;
 
     const newToken = {
@@ -288,7 +288,7 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
       expires_at: expiresAt,
     };
 
-    // 토큰 저장
+    // Save token
     await saveDiscordToken(userId, newToken);
 
     return newToken;
@@ -301,7 +301,7 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
   }
 }
 
-// 유효한 액세스 토큰 가져오기 (필요시 갱신)
+// Get valid access token (refresh if necessary)
 export async function getValidAccessToken(userId: string): Promise<string> {
   const token = await getDiscordToken(userId);
 
@@ -312,13 +312,13 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   // Add buffer time to ensure token isn't about to expire (1 minute)
   const bufferTime = 60 * 1000;
   const isTokenExpiringSoon = token.expires_at < (Date.now() + bufferTime);
-  
-  // 토큰이 유효한지 확인
+
+  // Check if token is valid
   if (!isTokenExpiringSoon) {
     return token.access_token;
   }
 
-  // 토큰이 만료되었거나 곧 만료될 예정이라면 갱신 시도
+  // Try to refresh if token is expired or about to expire
   try {
     const newToken = await refreshToken(userId, token.refresh_token);
     return newToken.access_token;
@@ -327,13 +327,13 @@ export async function getValidAccessToken(userId: string): Promise<string> {
     if (error instanceof DiscordAPIError && error.code === 'TOKEN_REFRESH_CONFLICT') {
       await new Promise(resolve => setTimeout(resolve, 3000));
       const retryToken = await getDiscordToken(userId);
-      
+
       if (retryToken && isTokenValid(retryToken)) {
         return retryToken.access_token;
       }
     }
-    
-    // 토큰 갱신에 실패하면 다시 로그인 필요
+
+    // Need to login again if token refresh fails
     throw new DiscordAPIError(
       'Token expired and refresh failed, please login again',
       401,
@@ -342,7 +342,7 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   }
 }
 
-// Discord 사용자 정보 가져오기
+// Fetch Discord user information
 export async function fetchDiscordUser(accessToken: string): Promise<DiscordUserData> {
   const response = await fetchWithRetry(`${DISCORD_API_URL}/users/@me`, {
     headers: {
@@ -362,13 +362,13 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
   return response.json();
 }
 
-// Discord 길드 내 사용자 역할 정보 가져오기
+// Fetch user roles in a Discord guild
 export async function fetchUserGuildRoles(accessToken: string, userId: string): Promise<string[]> {
   if (!GUILD_ID) {
     throw new DiscordAPIError('Guild ID not configured', 500, 'GUILD_ID_MISSING');
   }
 
-  // 여러 번 재시도해볼 수 있도록 최대 재시도 횟수 증가
+  // Increase max retries to allow multiple attempts
   const response = await fetchWithRetry(
     `${DISCORD_API_URL}/users/@me/guilds/${GUILD_ID}/member`,
     {
@@ -376,11 +376,11 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
         Authorization: `Bearer ${accessToken}`,
       },
     },
-    5 // 최대 5번 재시도
+    5 // Maximum 5 retries
   );
 
   if (!response.ok) {
-    // 사용자가 길드에 없는 경우
+    // If user is not in the guild
     if (response.status === 404) {
       console.warn(`User ${userId} is not a member of guild ${GUILD_ID}`);
       return [];
@@ -411,7 +411,7 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
   return guildMember.roles || [];
 }
 
-// OAuth2 인증 URL 생성
+// Generate OAuth2 authorization URL
 export function getDiscordAuthUrl(code_challenge?: string): string {
   if (!CLIENT_ID) {
     console.error('Discord client ID not configured');
@@ -423,7 +423,7 @@ export function getDiscordAuthUrl(code_challenge?: string): string {
 
   const scope = 'identify guilds guilds.members.read';
 
-  // 기본 파라미터
+  // Basic parameters
   const params: Record<string, string> = {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
@@ -431,7 +431,7 @@ export function getDiscordAuthUrl(code_challenge?: string): string {
     scope: scope,
   };
 
-  // PKCE를 사용하는 경우 추가 파라미터
+  // Additional parameters for PKCE
   if (code_challenge) {
     params.code_challenge = code_challenge;
     params.code_challenge_method = 'S256';
@@ -444,7 +444,7 @@ export function getDiscordAuthUrl(code_challenge?: string): string {
   return `https://discord.com/api/oauth2/authorize?${queryString}`;
 }
 
-// Discord 사용자 토큰 취소 (로그아웃 시)
+// Revoke Discord user token (during logout)
 export async function revokeToken(token: string): Promise<boolean> {
   if (!CLIENT_ID || !CLIENT_SECRET) {
     throw new Error('Discord client credentials not configured');

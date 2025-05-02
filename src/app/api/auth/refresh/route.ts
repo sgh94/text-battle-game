@@ -21,14 +21,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 토큰 갱신 시도
+    // Attempt to refresh the token
     const newToken = await refreshToken(userId, token);
 
     return NextResponse.json(newToken);
   } catch (error) {
     console.error('Token refresh error:', error);
 
-    // Discord API 오류 처리
+    // Handle Discord API errors
     if (error instanceof DiscordAPIError) {
       return NextResponse.json(
         { error: error.message, code: error.code },
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 기타 오류 처리
+    // Handle other errors
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Failed to refresh token',

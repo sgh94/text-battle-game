@@ -1,22 +1,22 @@
 /**
- * 디스코드 API 요청 최적화를 위한 캐싱 유틸리티
- * 중복 API 요청을 줄이고 속도 제한을 방지
+ * Discord API request optimization caching utility
+ * Reduces duplicate API requests and prevents rate limiting
  */
 
 interface UserCache {
   userId: string;
-  data: any; // 사용자 정보 캐시
-  timestamp: number; // 캐시 저장 시간
+  data: any; // User information cache
+  timestamp: number; // Cache storage time
 }
 
-// 캐시 유효 시간 (10분)
+// Cache validity period (10 minutes)
 const CACHE_TTL = 10 * 60 * 1000;
 
-// 메모리 내 캐시 저장소
+// In-memory cache storage
 let userCache: UserCache | null = null;
 
 /**
- * 사용자 정보를 캐시에 저장
+ * Store user information in cache
  */
 export function cacheUserData(userId: string, data: any): void {
   userCache = {
@@ -24,8 +24,8 @@ export function cacheUserData(userId: string, data: any): void {
     data,
     timestamp: Date.now(),
   };
-  
-  // 로컬 스토리지에도 캐싱 (페이지 새로고침용)
+
+  // Also cache in localStorage (for page refreshes)
   try {
     localStorage.setItem('discord_user_cache', JSON.stringify(userCache));
   } catch (e) {
@@ -34,27 +34,27 @@ export function cacheUserData(userId: string, data: any): void {
 }
 
 /**
- * 캐시에서 사용자 정보 조회
- * @param userId 사용자 ID
- * @returns 캐시된 사용자 정보 또는 null (캐시 만료 또는 없음)
+ * Retrieve user information from cache
+ * @param userId User ID
+ * @returns Cached user information or null (if cache expired or not found)
  */
 export function getCachedUserData(userId: string): any | null {
-  // 메모리 캐시 확인
+  // Check memory cache
   if (userCache && userCache.userId === userId) {
-    // 캐시 만료 여부 확인
+    // Check if cache is expired
     if (Date.now() - userCache.timestamp < CACHE_TTL) {
       return userCache.data;
     }
   }
-  
-  // 로컬 스토리지 캐시 확인
+
+  // Check localStorage cache
   try {
     const cachedData = localStorage.getItem('discord_user_cache');
     if (cachedData) {
       const parsedCache = JSON.parse(cachedData) as UserCache;
-      
+
       if (parsedCache.userId === userId && Date.now() - parsedCache.timestamp < CACHE_TTL) {
-        // 메모리 캐시 업데이트
+        // Update memory cache
         userCache = parsedCache;
         return parsedCache.data;
       }
@@ -62,12 +62,12 @@ export function getCachedUserData(userId: string): any | null {
   } catch (e) {
     console.error('Failed to retrieve cached user data:', e);
   }
-  
+
   return null;
 }
 
 /**
- * 사용자 캐시 무효화
+ * Invalidate user cache
  */
 export function invalidateUserCache(): void {
   userCache = null;

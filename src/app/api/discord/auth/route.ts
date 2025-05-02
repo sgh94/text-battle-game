@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 필수 환경 변수 체크
+    // Check required environment variables
     if (!process.env.DISCORD_CLIENT_ID ||
       !process.env.DISCORD_CLIENT_SECRET ||
       !process.env.DISCORD_GUILD_ID) {
@@ -35,28 +35,28 @@ export async function POST(request: NextRequest) {
     console.log('Processing Discord authentication with code:', code.substring(0, 10) + '...');
     console.log('Code verifier:', codeVerifier ? `present (${codeVerifier.length} chars)` : 'not provided');
 
-    // 1. 코드를 액세스 토큰으로 교환 (PKCE 코드 검증기 포함)
+    // 1. Exchange code for access token (including PKCE code verifier)
     const tokenData = await exchangeCodeForToken(code, codeVerifier);
     console.log('Token exchange successful');
 
-    // 2. Discord 사용자 정보 가져오기
+    // 2. Get Discord user information
     const userData = await fetchDiscordUser(tokenData.access_token);
     console.log('User info retrieved for:', userData.username);
 
-    // 3. 사용자의 길드 역할 가져오기
+    // 3. Get user's guild roles
     const userRoles = await fetchUserGuildRoles(tokenData.access_token, userData.id);
     console.log('User has', userRoles.length, 'roles');
 
-    // 4. 역할 기반으로 리그 결정
+    // 4. Determine leagues based on roles
     const leagues = determineUserLeagues(userRoles);
     const primaryLeague = getPrimaryLeague(leagues);
     console.log('User leagues:', leagues);
     console.log('Primary league:', primaryLeague);
 
-    // 5. 토큰 정보 저장 (데이터베이스)
+    // 5. Save token information (database)
     await saveDiscordToken(userData.id, tokenData);
 
-    // 6. 사용자 정보 저장 (데이터베이스)
+    // 6. Save user information (database)
     const userProfile = {
       id: userData.id,
       username: userData.username,
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     await saveDiscordUser(userProfile as DiscordUser);
     console.log('User data saved successfully');
 
-    // 7. 클라이언트에게 응답 (민감한 토큰 정보 제외)
+    // 7. Respond to client (excluding sensitive token information)
     const responseData = {
       id: userData.id,
       username: userData.username,
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Discord authentication error:', error);
 
-    // Discord API 오류 처리
+    // Handle Discord API errors
     if (error instanceof DiscordAPIError) {
       return NextResponse.json(
         { error: error.message, code: error.code },
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 기타 오류 처리
+    // Handle other errors
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Failed to authenticate with Discord',

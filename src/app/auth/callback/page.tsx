@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-// 클라이언트 컴포넌트: URL 파라미터 직접 읽기
+// Client component: Directly reading URL parameters
 function CallbackHandler() {
   const router = useRouter();
   const [status, setStatus] = useState('processing');
@@ -14,7 +14,7 @@ function CallbackHandler() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // URL에서 직접 코드와 상태 파라미터 추출
+        // Extract code and state parameters directly from URL
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
         const state = urlParams.get('state');
@@ -23,7 +23,7 @@ function CallbackHandler() {
           throw new Error('Authentication code is missing');
         }
 
-        // URL 파라미터 정리
+        // Clean URL parameters
         const url = new URL(window.location.href);
         url.search = '';
         window.history.replaceState({}, document.title, url.href);
@@ -79,15 +79,15 @@ function CallbackHandler() {
       }
     };
 
-    // 브라우저 환경에서만 실행
+    // Execute only in browser environment
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
-      
+
       if (code) {
         handleCallback();
       } else {
-        // 코드가 없으면 홈으로 리다이렉트
+        // Redirect to home if code is missing
         router.push('/');
       }
     }
@@ -154,7 +154,7 @@ function CallbackHandler() {
   return null;
 }
 
-// Suspense 경계를 사용하는 메인 컴포넌트
+// Main component using Suspense boundary
 export default function DiscordCallback() {
   return (
     <Suspense fallback={

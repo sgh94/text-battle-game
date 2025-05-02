@@ -40,9 +40,9 @@ export default function GlobalError({
                 </svg>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-center mb-4">서버 오류 발생</h2>
+            <h2 className="text-2xl font-bold text-center mb-4">Server Error Occurred</h2>
             <p className="text-gray-600 mb-6 text-center">
-              서버에서 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.
+              A problem occurred on the server. Please try again later.
             </p>
             <div className="bg-gray-50 p-4 rounded-md mb-6">
               <p className="text-sm text-gray-800 font-mono">
@@ -57,7 +57,7 @@ export default function GlobalError({
                 onClick={reset}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
               >
-                다시 시도
+                Try Again
               </button>
             </div>
           </div>

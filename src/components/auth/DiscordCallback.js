@@ -19,24 +19,24 @@ const DiscordCallback = () => {
         // Extract the code from the URL
         const urlParams = new URLSearchParams(location.search);
         const code = urlParams.get('code');
-        
+
         if (!code) {
           throw new Error('No authorization code provided');
         }
-        
+
         setStatus('connecting');
-        
+
         // Process the OAuth code
         const result = await handleDiscordCallback(code);
-        
+
         setUserData(result);
         setStatus('connected');
-        
+
         // Update user leagues based on Discord roles
         if (result.user && result.user.uid && result.discordData.roles) {
           await updateUserLeagues(result.user.uid, result.discordData.roles);
         }
-        
+
         // Redirect to the dashboard after a short delay
         setTimeout(() => {
           history.push('/dashboard');
@@ -47,7 +47,7 @@ const DiscordCallback = () => {
         setStatus('error');
       }
     };
-    
+
     processOAuthCallback();
   }, [location, history]);
 
@@ -61,7 +61,7 @@ const DiscordCallback = () => {
             <p>Processing your Discord login...</p>
           </div>
         );
-      
+
       case 'connecting':
         return (
           <div className="callback-status">
@@ -69,7 +69,7 @@ const DiscordCallback = () => {
             <p>Connecting to Discord...</p>
           </div>
         );
-      
+
       case 'connected':
         return (
           <div className="callback-status success">
@@ -79,14 +79,14 @@ const DiscordCallback = () => {
             <p>Redirecting to dashboard...</p>
           </div>
         );
-      
+
       case 'error':
         return (
           <div className="callback-status error">
             <div className="error-icon">✕</div>
             <h3>Connection Error</h3>
             <p>{error || 'An unexpected error occurred'}</p>
-            <button 
+            <button
               className="retry-button"
               onClick={() => window.location.href = '/'}
             >
@@ -94,7 +94,7 @@ const DiscordCallback = () => {
             </button>
           </div>
         );
-      
+
       default:
         return null;
     }

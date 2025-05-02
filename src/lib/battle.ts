@@ -8,7 +8,7 @@ export async function decideBattleWinner(
 ): Promise<BattleResult> {
   // Get Gemini API key from environment variables
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-  const GEMINI_MODEL_NAME = 'gemini-1.5-flash';
+  const GEMINI_MODEL_NAME = 'gemini-1.5-flash-8b';
 
   if (!GEMINI_API_KEY) {
     console.warn('Gemini API key not provided or invalid. Using fallback logic.');
@@ -94,14 +94,14 @@ export async function decideBattleWinner(
       if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
         const responseText = candidate.content.parts[0].text;
         try {
-          // --- 수정 시작 ---
-          // Markdown 코드 블록 제거 (```json ... ```)
+          // --- Start of modification ---
+          // Remove Markdown code blocks (```json ... ```)
           const cleanedText = responseText.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
-          // --- 수정 끝 ---
+          // --- End of modification ---
 
           // Parse the cleaned LLM response as JSON
-          // const resultJson = JSON.parse(responseText.trim()); // 기존 코드
-          const resultJson = JSON.parse(cleanedText); // 수정된 코드: 정리된 텍스트 파싱
+          // const resultJson = JSON.parse(responseText.trim()); // Original code
+          const resultJson = JSON.parse(cleanedText); // Modified code: parsing cleaned text
 
           // Verify required fields exist
           if (resultJson.winner && resultJson.narrative) {
@@ -110,7 +110,7 @@ export async function decideBattleWinner(
               resultJson.isDraw = resultJson.winner === 'draw';
             }
 
-            // If winner is 'draw', normalize it (이 부분은 그대로 유지)
+            // If winner is 'draw', normalize it (this part remains unchanged)
             if (resultJson.winner === 'draw') {
               resultJson.winner = Math.random() < 0.5 ? 'character1' : 'character2';
               resultJson.isDraw = true;
@@ -122,13 +122,13 @@ export async function decideBattleWinner(
               explanation: resultJson.narrative
             };
           } else {
-            console.error('API response JSON missing required fields (winner, narrative):', cleanedText); // 로그에 정리된 텍스트 출력
+            console.error('API response JSON missing required fields (winner, narrative):', cleanedText); // Log the cleaned text
             return fallbackDecision(character1, character2);
           }
         } catch (parseError) {
           console.error('Failed to parse API response as JSON:', parseError);
-          console.error('Received cleaned text:', responseText.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')); // 로그에 정리된 텍스트 출력
-          console.error('Original received text:', responseText); // 원본 텍스트도 로깅
+          console.error('Received cleaned text:', responseText.trim().replace(/^```(?:json)?\s*|\s*```$/g, '')); // Log the cleaned text
+          console.error('Original received text:', responseText); // Also log the original text
           return fallbackDecision(character1, character2);
         }
       } else {

@@ -4,7 +4,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 
-// Discord Provider 임포트
+// Import Discord Provider
 import DiscordProvider from '@/components/providers/discord-provider';
 import { JotaiProvider } from '@/components/providers/jotai-provider';
 
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   description: 'A Discord-based text battle game with LLM decision making',
 };
 
-// Viewport 설정을 별도로 분리 (Next.js 14 이상에서 권장)
+// Separate viewport settings (recommended for Next.js 14+)
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -40,7 +40,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://discord.com" />
       </head>
       <body className={inter.className}>
-        {/* Jotai Provider로 상태 관리 */}
+        {/* Jotai Provider for state management */}
         <JotaiProvider>
           {/* Discord Provider */}
           <DiscordProvider>

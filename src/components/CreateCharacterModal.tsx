@@ -26,7 +26,7 @@ export function CreateCharacterModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [availableLeagues, setAvailableLeagues] = useState<string[]>([]);
-  
+
   // Also track which leagues the user already has characters in
   const [leaguesWithCharacters, setLeaguesWithCharacters] = useState<string[]>([]);
 
@@ -34,12 +34,12 @@ export function CreateCharacterModal({
   useEffect(() => {
     if (user?.leagues && user.leagues.length > 0) {
       setAvailableLeagues(user.leagues);
-      
+
       // If no initial league is provided, select first available
       if (!selectedLeague && user.leagues.length > 0) {
         setSelectedLeague(user.leagues[0]);
       }
-      
+
       // Check which leagues already have characters
       checkExistingCharacters();
     }
@@ -48,18 +48,18 @@ export function CreateCharacterModal({
   // Check for existing characters in each league
   const checkExistingCharacters = async () => {
     if (!user?.id) return;
-    
+
     try {
       const response = await fetch(`/api/character?address=${user.id}`);
-      
+
       if (response.ok) {
         const data = await response.json();
         const characters = data.characters || [];
-        
+
         // Get the leagues that already have characters
         const leagues = characters.map((char: any) => char.league).filter(Boolean);
         setLeaguesWithCharacters(leagues);
-        
+
         // If the initially selected league already has a character, show error
         if (selectedLeague && leagues.includes(selectedLeague)) {
           setError(`You already have a hero in the ${getLeagueInfo(selectedLeague).name} league.`);
@@ -107,7 +107,7 @@ export function CreateCharacterModal({
       return;
     }
 
-    // 사용자 ID 확인
+    // Check if user ID is available
     if (!user?.id) {
       setError('No user ID found. Please reconnect your Discord account.');
       return;
@@ -130,9 +130,9 @@ export function CreateCharacterModal({
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${user.id}:${Date.now()}:discord_auth_${user.id}`,
         },
-        body: JSON.stringify({ 
-          name, 
-          traits, 
+        body: JSON.stringify({
+          name,
+          traits,
           userId: user.id,
           discordUsername: user.username,
           league: selectedLeague
@@ -228,11 +228,10 @@ export function CreateCharacterModal({
                       key={league}
                       type="button"
                       onClick={() => setSelectedLeague(league)}
-                      className={`text-left px-4 py-3 rounded transition-colors border ${
-                        selectedLeague === league 
-                          ? 'bg-gray-700 border-indigo-500' 
+                      className={`text-left px-4 py-3 rounded transition-colors border ${selectedLeague === league
+                          ? 'bg-gray-700 border-indigo-500'
                           : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center">
                         <span className="mr-2 text-xl">{leagueInfo.icon}</span>

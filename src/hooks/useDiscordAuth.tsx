@@ -44,11 +44,11 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
   const [isInitialized, setIsInitialized] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
 
-  // 사용자 정보 가져오기가 진행 중인지 추적하는 ref - 중복 요청 방지
+  // Ref to track if user info fetch is in progress - prevents duplicate requests
   const fetchingUserInfo = useRef(false);
-  // 이미 로그인 시도를 했는지 추적
+  // Track if login attempt has already been made
   const initialAuthCheckDone = useRef(false);
-  // 페이지가 로드될 때 콜백 URL에 code가 있는지 확인
+  // Check if the page is loaded with a code in the callback URL
   const isCallbackUrl = useRef(false);
 
   // Helper function to check if token is expired
@@ -58,7 +58,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
   // Fetch user info from Discord API
   const fetchUserInfo = useCallback(async (accessToken: string, retries = 0) => {
-    // 중복 요청 방지
+    // Prevent duplicate requests
     if (fetchingUserInfo.current) {
       console.log('User info fetch already in progress, skipping...');
       return null;
@@ -122,8 +122,8 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
 
       setUser(userInfo);
 
-      // 페이지 리로드 하지 않고 컴포넌트 상태만 업데이트
-      // router.refresh() 콜백 처리에서만 필요한 경우에 사용
+      // Update component state without page reload
+      // Use router.refresh() only when needed in callback handling
       if (isCallbackUrl.current) {
         router.refresh();
         isCallbackUrl.current = false;
@@ -195,17 +195,17 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     localStorage.removeItem('discord_code_verifier');
     setUser(null);
 
-    // API 요청 추적 초기화
+    // Reset API request tracking
     fetchingUserInfo.current = false;
     initialAuthCheckDone.current = false;
 
-    // 리프레시는 로그아웃할 때만 수행
+    // Refresh only when logging out
     router.refresh();
   }, [router]);
 
   // Check for existing session on mount and periodically try to fetch user data if needed
   useEffect(() => {
-    // 로그인 체크가 이미 수행되었으면 다시 시도하지 않음
+    // Don't try again if login check has already been performed
     if (initialAuthCheckDone.current) {
       return;
     }
@@ -214,7 +214,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       try {
         setIsConnecting(true);
 
-        // 콜백 URL 체크
+        // Check callback URL
         if (typeof window !== 'undefined') {
           const urlParams = new URLSearchParams(window.location.search);
           isCallbackUrl.current = !!urlParams.get('code');
@@ -257,17 +257,17 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     checkAuth();
   }, [fetchUserInfo, refreshAccessToken, logout]);
 
-  // Handle Discord OAuth callback - 이 부분은 콜백 처리에서만 실행되어야 함
+  // Handle Discord OAuth callback - this part should only run during callback processing
   useEffect(() => {
     if (!isInitialized) return;
 
-    // URL에 코드 파라미터가 있는 경우에만 실행 - 불필요한 실행 방지
+    // Only execute if there's a code parameter in the URL - prevents unnecessary execution
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
 
-    if (!code) return; // 코드가 없으면 콜백이 아니므로 처리하지 않음
+    if (!code) return; // Not a callback if there's no code, so don't process
 
-    isCallbackUrl.current = true; // 콜백 URL 표시
+    isCallbackUrl.current = true; // Mark as callback URL
 
     const handleCallback = async () => {
       const state = urlParams.get('state');
@@ -339,7 +339,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
           // Fetch user info with the new token
           await fetchUserInfo(tokenData.access_token);
 
-          // 콜백 처리 후에만 리프레시 필요함
+          // Refresh only needed after callback processing
           router.refresh();
         } catch (err) {
           console.error('Auth callback error:', err);
@@ -359,7 +359,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
     handleCallback();
   }, [isInitialized, fetchUserInfo, logout, router]);
 
-  // Refresh user roles - 명시적인 사용자 요청에 의해서만 호출됨
+  // Refresh user roles - only called by explicit user request
   const refreshRoles = async () => {
     try {
       setIsConnecting(true);
@@ -369,7 +369,7 @@ export function DiscordAuthProvider({ children }: { children: React.ReactNode })
       }
 
       await fetchUserInfo(accessToken);
-      // 역할 새로고침 시 UI 업데이트 필요
+      // UI update needed when refreshing roles
       router.refresh();
     } catch (err) {
       console.error('Role refresh error:', err);

@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`Refreshing roles for user: ${userId}`);
 
-    // 1. 데이터베이스에서 사용자 정보 조회
+    // 1. Retrieve user information from database
     const userProfile = await getDiscordUser(userId);
 
     if (!userProfile) {
@@ -39,25 +39,25 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // 2. 유효한 액세스 토큰 가져오기 (필요시 자동 갱신)
+      // 2. Get valid access token (auto-refresh if needed)
       console.log(`Getting valid access token for user: ${userId}`);
       const accessToken = await getValidAccessToken(userId);
 
-      // 3. Discord API를 통해 최신 역할 정보 가져오기
+      // 3. Get latest role information through Discord API
       console.log(`Fetching guild roles for user: ${userId}`);
       const updatedRoles = await fetchUserGuildRoles(accessToken, userId);
       console.log(`User ${userId} has ${updatedRoles.length} roles`);
 
-      // 4. 역할 기반으로 리그 계산
+      // 4. Calculate leagues based on roles
       const leagues = determineUserLeagues(updatedRoles);
       const primaryLeague = getPrimaryLeague(leagues);
       console.log(`User ${userId} leagues: ${leagues.join(', ')}, primary: ${primaryLeague}`);
 
-      // 5. 데이터베이스에 사용자 역할 및 리그 정보 업데이트
+      // 5. Update user roles and league information in database
       await updateUserRoles(userId, updatedRoles, leagues, primaryLeague || '');
       console.log(`Updated roles for user ${userId} successfully`);
 
-      // 6. 갱신된 사용자 정보 반환
+      // 6. Return updated user information
       const updatedUserProfile = {
         ...userProfile,
         roles: updatedRoles,
@@ -73,15 +73,15 @@ export async function POST(request: NextRequest) {
       let errorMessage = 'Unknown error during role refresh';
       let errorCode = 'UNKNOWN_ERROR';
       let status = 500;
-      
+
       if (error instanceof DiscordAPIError) {
         errorMessage = error.message;
         errorCode = error.code;
         status = error.status;
-        
+
         console.error(`Discord API Error: ${errorCode}, ${errorMessage}, Status: ${status}`);
-        
-        // 토큰이 만료되었거나 갱신 실패한 경우
+
+        // If token is expired or refresh failed
         if (error.code === 'TOKEN_NOT_FOUND' || error.code === 'TOKEN_REFRESH_FAILED' || error.code === 'TOKEN_INVALID') {
           return NextResponse.json(
             {
@@ -92,16 +92,16 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // 길드 멤버십 오류 (사용자가 서버에 없는 경우 등)
+        // Guild membership error (e.g., user not in server)
         if (error.code === 'FETCH_ROLES_FAILED') {
           console.log(`User ${userId} is not in the guild or roles fetch failed, setting default leagues`);
-          // 사용자가 서버에 없거나 역할이 없는 경우 기본 리그로 설정
+          // Set default leagues if user is not in server or has no roles
           const defaultRoles: string[] = [];
           const leagues = determineUserLeagues(defaultRoles);
           const primaryLeague = getPrimaryLeague(leagues);
 
           try {
-            // 데이터베이스에 기본 역할 및 리그 정보 업데이트
+            // Update database with default roles and league information
             await updateUserRoles(userId, defaultRoles, leagues, primaryLeague || '');
             console.log(`Updated user ${userId} with default roles successfully`);
 
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
 
       // Return a detailed error response
       return NextResponse.json(
-        { 
+        {
           error: errorMessage,
           code: errorCode,
           userId
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Discord role refresh request processing error:', error);
 
-    // Discord API 오류 처리
+    // Handle Discord API errors
     if (error instanceof DiscordAPIError) {
       return NextResponse.json(
         { error: error.message, code: error.code },
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 기타 오류 처리
+    // Handle other errors
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'Failed to refresh Discord roles',

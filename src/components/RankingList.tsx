@@ -31,8 +31,8 @@ export function RankingList() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState('general');
   const [allLeagues, setAllLeagues] = useState<string[]>(['general', 'veteran', 'community', 'morse']);
-  
-  // 디버그용 상태 추가
+
+  // Debugging state
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
@@ -58,20 +58,20 @@ export function RankingList() {
       setFetchError(null);
       setDebugInfo(null);
       const userId = user?.id;
-      
+
       console.log(`Fetching rankings for league: ${leagueId}`);
-      
+
       // Fetch rankings for the selected league with a cache-busting parameter
       const timestamp = Date.now();
       const response = await fetch(`/api/ranking?league=${leagueId}&limit=10&t=${timestamp}`);
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log(`Rankings for ${leagueId}:`, data.rankings);
-        
+
         // Set rankings directly - server already filters by league correctly
         setRankings(data.rankings || []);
-        
+
         // If user is logged in, fetch their ranking
         if (userId) {
           try {
@@ -85,7 +85,7 @@ export function RankingList() {
                 setUserRanking(null);
               }
             } else {
-              console.error(`Failed to fetch user ranking:`, 
+              console.error(`Failed to fetch user ranking:`,
                 await userRankingResponse.text().catch(() => 'Unknown error')
               );
               setUserRanking(null);
@@ -96,7 +96,7 @@ export function RankingList() {
           }
         }
       } else {
-        console.error('Failed to fetch rankings:', 
+        console.error('Failed to fetch rankings:',
           await response.text().catch(() => 'Unknown error')
         );
         setFetchError(`Failed to fetch rankings for league: ${leagueId}`);
@@ -137,23 +137,22 @@ export function RankingList() {
   return (
     <div className="mt-4">
       <h2 className="text-xl font-bold mb-6">Leaderboard</h2>
-      
+
       {/* League selector - larger, more prominent tabs */}
       <div className="mb-6">
         <div className="grid grid-cols-4 gap-1 bg-gray-900 rounded-lg p-1">
           {allLeagues.map(league => {
             const leagueInfo = getLeagueInfo(league);
             const isActive = selectedLeague === league;
-            
+
             return (
               <button
                 key={league}
                 onClick={() => setSelectedLeague(league)}
-                className={`py-3 px-2 rounded-md transition flex flex-col items-center justify-center text-center ${
-                  isActive 
-                    ? 'bg-gray-700 font-bold shadow-md' 
-                    : 'bg-gray-800 hover:bg-gray-750'
-                }`}
+                className={`py-3 px-2 rounded-md transition flex flex-col items-center justify-center text-center ${isActive
+                  ? 'bg-gray-700 font-bold shadow-md'
+                  : 'bg-gray-800 hover:bg-gray-750'
+                  }`}
                 style={isActive ? { backgroundColor: `${leagueInfo.color}30` } : {}}
               >
                 <span className="text-xl mb-1">{leagueInfo.icon}</span>
@@ -166,11 +165,11 @@ export function RankingList() {
 
       {fetchError && (
         <div className="bg-red-900/30 border border-red-700 text-red-200 px-4 py-3 rounded-md mb-4">
-          <p className="font-medium">오류 발생</p>
+          <p className="font-medium">Error Occurred</p>
           <p className="text-sm">{fetchError}</p>
         </div>
       )}
-      
+
       {debugInfo && (
         <div className="bg-blue-900/30 border border-blue-700 text-blue-200 px-4 py-3 rounded-md mb-4">
           <p className="text-sm">{debugInfo}</p>
@@ -203,7 +202,7 @@ export function RankingList() {
               {rankings.length} heroes
             </span>
           </div>
-          
+
           <div className="bg-gray-800 rounded-b-lg overflow-hidden">
             <table className="w-full">
               <thead className="bg-gray-700">
@@ -217,11 +216,10 @@ export function RankingList() {
               </thead>
               <tbody>
                 {rankings.map((character, index) => (
-                  <tr 
-                    key={character.id} 
-                    className={`border-t border-gray-700 hover:bg-gray-700 transition ${
-                      userRanking?.characterId === character.id ? 'bg-purple-900 bg-opacity-30' : ''
-                    }`}
+                  <tr
+                    key={character.id}
+                    className={`border-t border-gray-700 hover:bg-gray-700 transition ${userRanking?.characterId === character.id ? 'bg-purple-900 bg-opacity-30' : ''
+                      }`}
                   >
                     <td className="px-4 py-3">{index + 1}</td>
                     <td className="px-4 py-3">
@@ -238,7 +236,7 @@ export function RankingList() {
                     </td>
                   </tr>
                 ))}
-                
+
                 {/* Show user's ranking if not in top 10 */}
                 {userRanking && !isUserInTopRankings() && (
                   <>
@@ -277,15 +275,15 @@ export function RankingList() {
           <span className="font-medium">Eligibility:</span> {getLeagueInfo(selectedLeague).eligibility}
         </p>
       </div>
-      
-      {/* 개발 모드에서만 표시되는 디버그 버튼 */}
+
+      {/* Debug button only shown in development mode */}
       {process.env.NODE_ENV === 'development' && (
         <div className="mt-2 text-right">
-          <button 
-            onClick={() => fetchRankings(selectedLeague)} 
+          <button
+            onClick={() => fetchRankings(selectedLeague)}
             className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded-md"
           >
-            새로고침
+            Refresh
           </button>
         </div>
       )}

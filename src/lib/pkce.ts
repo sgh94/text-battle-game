@@ -1,18 +1,18 @@
 /**
- * PKCE (Proof Key for Code Exchange) 유틸리티 함수
+ * PKCE (Proof Key for Code Exchange) Utility Functions
  * 
- * 이 모듈은 OAuth 2.0 인증을 위한 PKCE 챌린지 생성에 필요한 유틸리티를 제공합니다.
- * Web API만 사용하여 Edge Runtime과 호환됩니다.
+ * This module provides utilities needed for generating PKCE challenges for OAuth 2.0 authentication.
+ * Uses only Web API to be compatible with Edge Runtime.
  */
 
 /**
- * 지정된 길이의 랜덤 문자열 생성
+ * Generate a random string of specified length
  */
 export function generateRandomString(length: number): string {
   const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
   const values = new Uint8Array(length);
 
-  // Web Crypto API 사용 (Edge Runtime 호환)
+  // Use Web Crypto API (Edge Runtime compatible)
   self.crypto.getRandomValues(values);
 
   let result = '';
@@ -24,15 +24,15 @@ export function generateRandomString(length: number): string {
 }
 
 /**
- * 문자열을 UTF-8 버퍼로 변환
+ * Convert string to UTF-8 buffer
  */
 function stringToBuffer(str: string): Uint8Array {
   return new TextEncoder().encode(str);
 }
 
 /**
- * BASE64URL 인코딩
- * (URL 및 파일명 안전 BASE64 인코딩)
+ * BASE64URL encoding
+ * (URL and filename safe BASE64 encoding)
  */
 function base64URLEncode(buffer: ArrayBuffer): string {
   return btoa(Array.from(new Uint8Array(buffer)).map(byte => String.fromCharCode(byte)).join(''))
@@ -42,7 +42,7 @@ function base64URLEncode(buffer: ArrayBuffer): string {
 }
 
 /**
- * SHA-256 해시 생성 (Web Crypto API 사용)
+ * Generate SHA-256 hash (using Web Crypto API)
  */
 async function sha256(plain: string): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
@@ -51,8 +51,8 @@ async function sha256(plain: string): Promise<ArrayBuffer> {
 }
 
 /**
- * PKCE 코드 챌린지 생성
- * 코드 검증기를 기반으로 S256 코드 챌린지 생성
+ * Generate PKCE code challenge
+ * Creates an S256 code challenge based on the code verifier
  */
 export async function generateCodeChallenge(codeVerifier: string): Promise<string> {
   try {

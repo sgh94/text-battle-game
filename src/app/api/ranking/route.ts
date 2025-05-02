@@ -12,24 +12,24 @@ export async function GET(request: NextRequest) {
 
     console.log(`Fetching rankings for league: ${league}`);
 
-    // 리그별 랭킹 키 (sorted set)
+    // Ranking key by league (sorted set)
     const rankingKey = `league:${league}:ranking`;
 
-    // 1. 해당 리그의 sorted set이 있는지 확인
+    // 1. Check if the sorted set for this league exists
     const exists = await kv.exists(rankingKey);
     if (!exists) {
       console.log(`Ranking for league ${league} doesn't exist yet`);
       return NextResponse.json({ rankings: [] });
     }
 
-    // 2. 리그별 랭킹 가져오기 (점수 내림차순)
+    // 2. Get league rankings (score in descending order)
     const topRankings = await kv.zrange(rankingKey, offset, offset + limit - 1, { withScores: true, rev: true });
     if (!topRankings || topRankings.length === 0) {
       console.log(`No rankings found for league ${league}`);
       return NextResponse.json({ rankings: [] });
     }
 
-    // 3. ID와 점수 분리
+    // 3. Separate IDs and scores
     const characterScores: Array<{ id: string, score: number }> = [];
     for (let i = 0; i < topRankings.length; i += 2) {
       const id = String(topRankings[i]);
@@ -39,11 +39,11 @@ export async function GET(request: NextRequest) {
 
     console.log(`Found ${characterScores.length} top characters for league ${league}`);
 
-    // 4. 캐릭터 정보 가져오기 (병렬 요청)
+    // 4. Get character information (parallel requests)
     const rankingsData = await Promise.all(
       characterScores.map(async ({ id, score }, index) => {
         try {
-          // 캐릭터 정보 가져오기
+          // Get character information
           const character = await kv.hgetall<Character>(`character:${id}`);
 
           if (!character) {
@@ -51,17 +51,17 @@ export async function GET(request: NextRequest) {
             return null;
           }
 
-          // 리그 필터링 - 각 리그는 독립적이므로 정확히 일치해야 함
+          // League filtering - each league is independent, so it must match exactly
           if (character.league !== league) {
             console.log(`Character ${id} (${character.name}) has league ${character.league}, not ${league}`);
             return null;
           }
 
-          // 랭킹 정보 추가
+          // Add ranking information
           return {
             ...character,
             rank: offset + index + 1,
-            elo: score // Sorted Set의 점수 사용
+            elo: score // Use score from Sorted Set
           };
         } catch (err) {
           console.error(`Error fetching character ${id}:`, err);
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // 유효한 결과만 필터링
+    // Filter valid results only
     const validRankings = rankingsData.filter(Boolean);
 
     console.log(`Returning ${validRankings.length} ranked characters for league ${league}`);

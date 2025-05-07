@@ -4,18 +4,21 @@ import {
   getDiscordToken,
   saveDiscordToken,
   isTokenValid,
-  DiscordToken
-} from './db';
+  DiscordToken,
+} from "./db";
 
 // Discord API configuration
-const DISCORD_API_URL = 'https://discord.com/api/v10';
+const DISCORD_API_URL = "https://discord.com/api/v10";
 // Use a fallback client ID in case the environment variable is not set
-const CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || '1088729716317495367';
+const CLIENT_ID =
+  process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || "1088729716317495367";
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 // Redirect URI - Must exactly match the one registered in the Discord Developer Portal
-const REDIRECT_URI = process.env.NODE_ENV === 'development'
-  ? 'http://localhost:3000/auth/callback'
-  : (process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || 'https://mitosis-game-alpha.vercel.app/auth/callback');
+const REDIRECT_URI =
+  process.env.NODE_ENV === "development"
+    ? "http://localhost:3000/auth/callback"
+    : process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI ||
+      "https://mitosis-game-alpha.vercel.app/auth/callback";
 
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
 
@@ -34,11 +37,11 @@ const rateLimitCache = {
 
     if (timeSinceLastRequest < this.minDelay) {
       const waitTime = this.minDelay - timeSinceLastRequest;
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
 
     this.lastRequestTime = Date.now();
-  }
+  },
 };
 
 // Discord API error type
@@ -47,9 +50,14 @@ export class DiscordAPIError extends Error {
   code: string;
   retryAfter?: number;
 
-  constructor(message: string, status: number, code: string = 'DISCORD_API_ERROR', retryAfter?: number) {
+  constructor(
+    message: string,
+    status: number,
+    code: string = "DISCORD_API_ERROR",
+    retryAfter?: number
+  ) {
     super(message);
-    this.name = 'DiscordAPIError';
+    this.name = "DiscordAPIError";
     this.status = status;
     this.code = code;
     this.retryAfter = retryAfter;
@@ -87,7 +95,11 @@ export interface DiscordGuildMember {
 }
 
 // API request helper with retry logic
-async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries = 3
+): Promise<Response> {
   let retries = 0;
 
   while (retries < maxRetries) {
@@ -99,20 +111,27 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 
       // Handle 429 (rate limit) response
       if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('Retry-After') || '1', 10);
+        const retryAfter = parseInt(
+          response.headers.get("Retry-After") || "1",
+          10
+        );
         const waitTime = retryAfter * 1000 || 1000;
-        console.log(`Rate limited by Discord API. Waiting ${waitTime}ms before retry...`);
+        console.log(
+          `Rate limited by Discord API. Waiting ${waitTime}ms before retry...`
+        );
 
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
         retries++;
         continue;
       }
 
       // Handle 5xx server errors with retry
       if (response.status >= 500 && response.status < 600) {
-        console.log(`Discord API server error (${response.status}). Retrying...`);
+        console.log(
+          `Discord API server error (${response.status}). Retrying...`
+        );
         const waitTime = Math.pow(2, retries) * 1000;
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
         retries++;
         continue;
       }
@@ -120,7 +139,10 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
       return response;
     } catch (error) {
       // Retry for network errors
-      console.error(`API call failed (attempt ${retries + 1}/${maxRetries}):`, error);
+      console.error(
+        `API call failed (attempt ${retries + 1}/${maxRetries}):`,
+        error
+      );
 
       if (retries === maxRetries - 1) {
         throw error;
@@ -128,7 +150,7 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 
       // Apply exponential backoff (increasing wait time with each retry)
       const waitTime = Math.pow(2, retries) * 1000;
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
       retries++;
     }
   }
@@ -137,20 +159,23 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 }
 
 // Exchange authorization code for token
-export async function exchangeCodeForToken(code: string, code_verifier?: string): Promise<DiscordToken> {
+export async function exchangeCodeForToken(
+  code: string,
+  code_verifier?: string
+): Promise<DiscordToken> {
   if (!CLIENT_ID) {
-    throw new Error('Discord client ID not configured');
+    throw new Error("Discord client ID not configured");
   }
 
   if (!CLIENT_SECRET) {
-    throw new Error('Discord client secret not configured');
+    throw new Error("Discord client secret not configured");
   }
 
   // Basic parameters
   const params: Record<string, string> = {
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
-    grant_type: 'authorization_code',
+    grant_type: "authorization_code",
     code,
     redirect_uri: REDIRECT_URI,
   };
@@ -162,39 +187,47 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
 
   const formBody = new URLSearchParams(params);
 
-  console.log('Exchanging code for token with params:', {
+  console.log("Exchanging code for token with params:", {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    code_verifier: code_verifier ? '(provided)' : '(not provided)'
+    code_verifier: code_verifier ? "(provided)" : "(not provided)",
   });
 
   try {
     // Increase max retries for token exchange to 5
-    const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+    const response = await fetchWithRetry(
+      `${DISCORD_API_URL}/oauth2/token`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formBody.toString(),
       },
-      body: formBody.toString(),
-    }, 5);
+      5
+    );
 
     if (!response.ok) {
       let errorData;
       try {
         errorData = await response.json();
-        console.error('Discord API error response:', errorData);
+        console.error("Discord API error response:", errorData);
       } catch (e) {
-        errorData = { error: 'Failed to parse error response' };
-        console.error('Failed to parse Discord API error response');
+        errorData = { error: "Failed to parse error response" };
+        console.error("Failed to parse Discord API error response");
       }
 
       // Extract retry information
-      const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+      const retryAfter = parseInt(
+        response.headers.get("Retry-After") || "0",
+        10
+      );
 
       throw new DiscordAPIError(
-        errorData.error || `Failed to exchange code for token: ${response.status}`,
+        errorData.error ||
+          `Failed to exchange code for token: ${response.status}`,
         response.status,
-        'TOKEN_EXCHANGE_FAILED',
+        "TOKEN_EXCHANGE_FAILED",
         retryAfter
       );
     }
@@ -210,14 +243,21 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
       expires_at: expiresAt,
     };
   } catch (error) {
-    console.error('Token exchange error details:', error);
+    console.error("Token exchange error details:", error);
 
     // Check if this is a network error and provide a clear message
-    if (error instanceof TypeError || (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string' && error.message.includes('fetch'))) {
+    if (
+      error instanceof TypeError ||
+      (typeof error === "object" &&
+        error !== null &&
+        "message" in error &&
+        typeof error.message === "string" &&
+        error.message.includes("fetch"))
+    ) {
       throw new DiscordAPIError(
-        'Network error when connecting to Discord. Please check your internet connection.',
+        "Network error when connecting to Discord. Please check your internet connection.",
         0,
-        'NETWORK_ERROR'
+        "NETWORK_ERROR"
       );
     }
 
@@ -226,15 +266,18 @@ export async function exchangeCodeForToken(code: string, code_verifier?: string)
 }
 
 // Refresh token
-export async function refreshToken(userId: string, refreshToken: string): Promise<DiscordToken> {
+export async function refreshToken(
+  userId: string,
+  refreshToken: string
+): Promise<DiscordToken> {
   if (!CLIENT_ID || !CLIENT_SECRET) {
-    throw new Error('Discord client credentials not configured');
+    throw new Error("Discord client credentials not configured");
   }
 
   // Check if we're already refreshing this user's token
   if (refreshingTokens.has(userId)) {
     // Wait a bit and check if a new token is available
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     const existingToken = await getDiscordToken(userId);
 
     if (existingToken && isTokenValid(existingToken)) {
@@ -243,9 +286,9 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
 
     // If still not valid, throw an error to prevent infinite loops
     throw new DiscordAPIError(
-      'Token refresh already in progress but not completed',
+      "Token refresh already in progress but not completed",
       409,
-      'TOKEN_REFRESH_CONFLICT'
+      "TOKEN_REFRESH_CONFLICT"
     );
   }
 
@@ -256,24 +299,30 @@ export async function refreshToken(userId: string, refreshToken: string): Promis
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
-      grant_type: 'refresh_token',
+      grant_type: "refresh_token",
       refresh_token: refreshToken,
     });
 
-    const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+    const response = await fetchWithRetry(
+      `${DISCORD_API_URL}/oauth2/token`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params.toString(),
       },
-      body: params.toString(),
-    }, 3);
+      3
+    );
 
     if (!response.ok) {
-      const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+      const data = await response
+        .json()
+        .catch(() => ({ error: "Failed to parse error response" }));
       throw new DiscordAPIError(
         data.error || `Failed to refresh token: ${response.status}`,
         response.status,
-        'TOKEN_REFRESH_FAILED'
+        "TOKEN_REFRESH_FAILED"
       );
     }
 
@@ -306,12 +355,12 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   const token = await getDiscordToken(userId);
 
   if (!token) {
-    throw new DiscordAPIError('User token not found', 401, 'TOKEN_NOT_FOUND');
+    throw new DiscordAPIError("User token not found", 401, "TOKEN_NOT_FOUND");
   }
 
   // Add buffer time to ensure token isn't about to expire (1 minute)
   const bufferTime = 60 * 1000;
-  const isTokenExpiringSoon = token.expires_at < (Date.now() + bufferTime);
+  const isTokenExpiringSoon = token.expires_at < Date.now() + bufferTime;
 
   // Check if token is valid
   if (!isTokenExpiringSoon) {
@@ -324,8 +373,11 @@ export async function getValidAccessToken(userId: string): Promise<string> {
     return newToken.access_token;
   } catch (error) {
     // If it's a conflict (already refreshing), try once more after waiting
-    if (error instanceof DiscordAPIError && error.code === 'TOKEN_REFRESH_CONFLICT') {
-      await new Promise(resolve => setTimeout(resolve, 3000));
+    if (
+      error instanceof DiscordAPIError &&
+      error.code === "TOKEN_REFRESH_CONFLICT"
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
       const retryToken = await getDiscordToken(userId);
 
       if (retryToken && isTokenValid(retryToken)) {
@@ -335,27 +387,35 @@ export async function getValidAccessToken(userId: string): Promise<string> {
 
     // Need to login again if token refresh fails
     throw new DiscordAPIError(
-      'Token expired and refresh failed, please login again',
+      "Token expired and refresh failed, please login again",
       401,
-      'TOKEN_REFRESH_FAILED'
+      "TOKEN_REFRESH_FAILED"
     );
   }
 }
 
 // Fetch Discord user information
-export async function fetchDiscordUser(accessToken: string): Promise<DiscordUserData> {
-  const response = await fetchWithRetry(`${DISCORD_API_URL}/users/@me`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
+export async function fetchDiscordUser(
+  accessToken: string
+): Promise<DiscordUserData> {
+  const response = await fetchWithRetry(
+    `${DISCORD_API_URL}/users/@me`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     },
-  }, 3);
+    3
+  );
 
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+    const data = await response
+      .json()
+      .catch(() => ({ error: "Failed to parse error response" }));
     throw new DiscordAPIError(
       data.error || `Failed to fetch user data: ${response.status}`,
       response.status,
-      response.status === 401 ? 'TOKEN_INVALID' : 'FETCH_USER_FAILED'
+      response.status === 401 ? "TOKEN_INVALID" : "FETCH_USER_FAILED"
     );
   }
 
@@ -363,9 +423,16 @@ export async function fetchDiscordUser(accessToken: string): Promise<DiscordUser
 }
 
 // Fetch user roles in a Discord guild
-export async function fetchUserGuildRoles(accessToken: string, userId: string): Promise<string[]> {
+export async function fetchUserGuildRoles(
+  accessToken: string,
+  userId: string
+): Promise<string[]> {
   if (!GUILD_ID) {
-    throw new DiscordAPIError('Guild ID not configured', 500, 'GUILD_ID_MISSING');
+    throw new DiscordAPIError(
+      "Guild ID not configured",
+      500,
+      "GUILD_ID_MISSING"
+    );
   }
 
   // Increase max retries to allow multiple attempts
@@ -386,15 +453,17 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
       return [];
     }
 
-    const data = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
-    const retryAfter = parseInt(response.headers.get('Retry-After') || '0', 10);
+    const data = await response
+      .json()
+      .catch(() => ({ error: "Failed to parse error response" }));
+    const retryAfter = parseInt(response.headers.get("Retry-After") || "0", 10);
 
     // If unauthorized, indicate a token issue
     if (response.status === 401) {
       throw new DiscordAPIError(
-        'Discord authorization invalid or expired',
+        "Discord authorization invalid or expired",
         401,
-        'TOKEN_INVALID',
+        "TOKEN_INVALID",
         retryAfter
       );
     }
@@ -402,44 +471,44 @@ export async function fetchUserGuildRoles(accessToken: string, userId: string): 
     throw new DiscordAPIError(
       data.error || `Failed to fetch guild roles: ${response.status}`,
       response.status,
-      'FETCH_ROLES_FAILED',
+      "FETCH_ROLES_FAILED",
       retryAfter
     );
   }
 
-  const guildMember = await response.json() as DiscordGuildMember;
+  const guildMember = (await response.json()) as DiscordGuildMember;
   return guildMember.roles || [];
 }
 
 // Generate OAuth2 authorization URL
 export function getDiscordAuthUrl(code_challenge?: string): string {
   if (!CLIENT_ID) {
-    console.error('Discord client ID not configured');
-    throw new Error('Discord client ID not configured');
+    console.error("Discord client ID not configured");
+    throw new Error("Discord client ID not configured");
   }
 
-  console.log('Using Discord Client ID:', CLIENT_ID);
-  console.log('Using redirect URI:', REDIRECT_URI);
+  console.log("Using Discord Client ID:", CLIENT_ID);
+  console.log("Using redirect URI:", REDIRECT_URI);
 
-  const scope = 'identify guilds guilds.members.read';
+  const scope = "identify guilds guilds.members.read";
 
   // Basic parameters
   const params: Record<string, string> = {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    response_type: 'code',
+    response_type: "code",
     scope: scope,
   };
 
   // Additional parameters for PKCE
   if (code_challenge) {
     params.code_challenge = code_challenge;
-    params.code_challenge_method = 'S256';
+    params.code_challenge_method = "S256";
   }
 
   const queryString = Object.entries(params)
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-    .join('&');
+    .join("&");
 
   return `https://discord.com/api/oauth2/authorize?${queryString}`;
 }
@@ -447,7 +516,7 @@ export function getDiscordAuthUrl(code_challenge?: string): string {
 // Revoke Discord user token (during logout)
 export async function revokeToken(token: string): Promise<boolean> {
   if (!CLIENT_ID || !CLIENT_SECRET) {
-    throw new Error('Discord client credentials not configured');
+    throw new Error("Discord client credentials not configured");
   }
 
   const params = new URLSearchParams({
@@ -456,13 +525,16 @@ export async function revokeToken(token: string): Promise<boolean> {
     token,
   });
 
-  const response = await fetchWithRetry(`${DISCORD_API_URL}/oauth2/token/revoke`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params.toString(),
-  });
+  const response = await fetchWithRetry(
+    `${DISCORD_API_URL}/oauth2/token/revoke`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    }
+  );
 
   return response.ok;
 }

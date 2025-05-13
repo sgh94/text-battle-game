@@ -13,7 +13,7 @@ const DISCORD_API_URL = "https://discord.com/api/v10";
 const CLIENT_ID =
   process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || "1088729716317495367";
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-// Redirect URI - Must exactly match the one registered in the Discord Developer Portal
+// Redirect URI - Must exactly match the one registered in the Discord Developer Portal!
 const REDIRECT_URI =
   process.env.NODE_ENV === "development"
     ? "http://localhost:3000/auth/callback"

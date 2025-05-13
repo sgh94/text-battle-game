@@ -38,11 +38,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
+// Redirect URI - Use environment variables only with localhost fallback
 const REDIRECT_URI =
   typeof window !== "undefined" && window.location.hostname === "localhost"
     ? "http://localhost:3000/auth/callback"
-    : process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI ||
-      "https://mitosis-game-alpha.vercel.app/auth/callback";
+    : process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || "";
 
 // Create exponential backoff mechanism
 const createBackoffDelay = (
@@ -466,9 +466,7 @@ export function DiscordAuthProvider({
           // Construct auth URL
           const baseUrl = "https://discord.com/api/oauth2/authorize";
           const params = new URLSearchParams({
-            client_id:
-              process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID ||
-              "1088729716317495367",
+            client_id: process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID || "",
             redirect_uri: REDIRECT_URI,
             response_type: "code",
             scope: "identify guilds guilds.members.read",

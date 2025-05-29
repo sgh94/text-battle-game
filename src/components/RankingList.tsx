@@ -85,13 +85,16 @@ export function RankingList() {
         // If user is logged in, fetch their ranking
         if (userId) {
           try {
+            console.log(`Fetching user ranking for userId: ${userId}, league: ${leagueId}`);
             const userRankingResponse = await fetch(`/api/ranking/user?userId=${userId}&league=${leagueId}&t=${timestamp}`);
             if (userRankingResponse.ok) {
               const userRankingData = await userRankingResponse.json();
+              console.log(`User ranking response for ${leagueId}:`, userRankingData);
               if (userRankingData.ranking) {
                 console.log(`User ranking for ${leagueId}:`, userRankingData.ranking);
                 setUserRanking(userRankingData.ranking);
               } else {
+                console.log(`No user ranking found for ${leagueId}`);
                 setUserRanking(null);
               }
             } else {
@@ -104,6 +107,9 @@ export function RankingList() {
             console.error('Error fetching user ranking:', userRankingError);
             setUserRanking(null);
           }
+        } else {
+          console.log('No user logged in, skipping user ranking fetch');
+          setUserRanking(null);
         }
       } else {
         console.error('Failed to fetch rankings:',
@@ -184,9 +190,16 @@ export function RankingList() {
         </div>
       )}
 
-      {debugInfo && (
-        <div className="bg-blue-900/30 border border-blue-700 text-blue-200 px-4 py-3 rounded-md mb-4">
-          <p className="text-sm">{debugInfo}</p>
+      {/* Debug info for development only */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mb-4 bg-blue-900/30 border border-blue-700 text-blue-200 px-4 py-3 rounded-md">
+          <p className="text-sm">Debug Info:</p>
+          <p className="text-xs">User ID: {user?.id || 'Not logged in'}</p>
+          <p className="text-xs">User Connected: {user ? 'Yes' : 'No'}</p>
+          <p className="text-xs">Selected League: {selectedLeague}</p>
+          <p className="text-xs">User Ranking: {userRanking ? `#${userRanking.rank} (${userRanking.characterName})` : 'None'}</p>
+          <p className="text-xs">Is User in Top Rankings: {isUserInTopRankings() ? 'Yes' : 'No'}</p>
+          <p className="text-xs">Rankings Count: {rankings.length}</p>
         </div>
       )}
 
@@ -249,25 +262,29 @@ export function RankingList() {
                     </tr>
                   ))}
 
-                  {/* Show user's ranking if not in top 10 */}
-                  {userRanking && !isUserInTopRankings() && (
+                  {/* Show user's ranking - always show if exists */}
+                  {userRanking && (
                     <>
-                      <tr className="border-t border-gray-600">
-                        <td colSpan={5} className="px-4 py-2 text-center text-xs text-gray-500">
-                          • • •
-                        </td>
-                      </tr>
-                      <tr className="border-t border-gray-700 bg-purple-900 bg-opacity-30">
-                        <td className="px-4 py-3">{userRanking.rank}</td>
-                        <td className="px-4 py-3">
-                          <Link href={`/character/${userRanking.characterId}`} className="text-purple-400 hover:text-purple-300">
-                            {userRanking.characterName}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3 text-gray-400">{user ? user.username : ''}</td>
-                        <td className="px-4 py-3 text-right font-bold">{userRanking.elo}</td>
-                        <td className="px-4 py-3"></td>
-                      </tr>
+                      {!isUserInTopRankings() && (
+                        <tr className="border-t border-gray-600">
+                          <td colSpan={5} className="px-4 py-2 text-center text-xs text-gray-500">
+                            • • •
+                          </td>
+                        </tr>
+                      )}
+                      {!isUserInTopRankings() && (
+                        <tr className="border-t border-gray-700 bg-purple-900 bg-opacity-30">
+                          <td className="px-4 py-3">{userRanking.rank}</td>
+                          <td className="px-4 py-3">
+                            <Link href={`/character/${userRanking.characterId}`} className="text-purple-400 hover:text-purple-300">
+                              {userRanking.characterName}
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-gray-400">{user ? formatAddress(user.id) : ''}</td>
+                          <td className="px-4 py-3 text-right font-bold">{userRanking.elo}</td>
+                          <td className="px-4 py-3"></td>
+                        </tr>
+                      )}
                     </>
                   )}
                 </tbody>

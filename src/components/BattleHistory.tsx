@@ -111,7 +111,13 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
       if (isNaN(date.getTime())) {
         return "Invalid Date";
       }
-      return date.toLocaleString();
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }); // 간결한 영어 형식
     } catch (error) {
       console.error("Error formatting date:", error);
       return "Invalid Date";

@@ -1,14 +1,14 @@
-import { kv } from "@vercel/kv";
-import { NextRequest, NextResponse } from "next/server";
-import { Character, ScoreMember } from "@/types";
+import { kv } from '@vercel/kv';
+import { NextRequest, NextResponse } from 'next/server';
+import { Character, ScoreMember } from '@/types';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const limit = parseInt(request.nextUrl.searchParams.get("limit") || "50"); // Increased default value to 50
-    const offset = parseInt(request.nextUrl.searchParams.get("offset") || "0");
-    const league = request.nextUrl.searchParams.get("league") || "general";
+    const limit = parseInt(request.nextUrl.searchParams.get('limit') || '10');
+    const offset = parseInt(request.nextUrl.searchParams.get('offset') || '0');
+    const league = request.nextUrl.searchParams.get('league') || 'general';
 
     console.log(`Fetching rankings for league: ${league} with limit: ${limit}`);
 
@@ -26,32 +26,25 @@ export async function GET(request: NextRequest) {
     const totalCount = await kv.zcard(rankingKey);
     console.log(`Total characters in league ${league}: ${totalCount}`);
 
-    // 2. Get league rankings (score in descending order)
-    // If there are 10+ characters, show top 10, otherwise show all
-    const actualLimit = totalCount >= 10 ? Math.min(10, limit) : totalCount;
-    const topRankings = await kv.zrange(
-      rankingKey,
-      offset,
-      offset + actualLimit - 1,
-      { withScores: true, rev: true }
-    );
-
+    // 2. Get more rankings than needed to account for potential filtering
+    // We'll fetch up to 50 to ensure we get enough valid results after filtering
+    const fetchLimit = Math.min(50, totalCount);
+    const topRankings = await kv.zrange(rankingKey, offset, offset + fetchLimit - 1, { withScores: true, rev: true });
+    
     if (!topRankings || topRankings.length === 0) {
       console.log(`No rankings found for league ${league}`);
       return NextResponse.json({ rankings: [], total: totalCount });
     }
 
     // 3. Separate IDs and scores
-    const characterScores: Array<{ id: string; score: number }> = [];
+    const characterScores: Array<{ id: string, score: number }> = [];
     for (let i = 0; i < topRankings.length; i += 2) {
       const id = String(topRankings[i]);
       const score = Number(topRankings[i + 1]);
       characterScores.push({ id, score });
     }
 
-    console.log(
-      `Found ${characterScores.length} top characters for league ${league}`
-    );
+    console.log(`Found ${characterScores.length} character scores for league ${league}`);
 
     // 4. Get character information (parallel requests)
     const rankingsData = await Promise.all(
@@ -67,9 +60,7 @@ export async function GET(request: NextRequest) {
 
           // League filtering - each league is independent, so it must match exactly
           if (character.league !== league) {
-            console.log(
-              `Character ${id} (${character.name}) has league ${character.league}, not ${league}`
-            );
+            console.log(`Character ${id} (${character.name}) has league ${character.league}, not ${league}`);
             return null;
           }
 
@@ -77,7 +68,7 @@ export async function GET(request: NextRequest) {
           return {
             ...character,
             rank: offset + index + 1,
-            elo: score, // Use score from Sorted Set
+            elo: score // Use score from Sorted Set
           };
         } catch (err) {
           console.error(`Error fetching character ${id}:`, err);
@@ -86,23 +77,24 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Filter valid results only
-    const validRankings = rankingsData.filter(Boolean);
+    // Filter valid results only and limit to requested amount
+    const validRankings = rankingsData.filter(Boolean).slice(0, limit);
 
-    console.log(
-      `Returning ${validRankings.length} ranked characters for league ${league} (total: ${totalCount})`
-    );
+    // Fix ranking numbers after filtering
+    const finalRankings = validRankings.map((character, index) => ({
+      ...character,
+      rank: offset + index + 1
+    }));
 
-    return NextResponse.json({
-      rankings: validRankings,
+    console.log(`Returning ${finalRankings.length} ranked characters for league ${league} (total: ${totalCount})`);
+
+    return NextResponse.json({ 
+      rankings: finalRankings, 
       total: totalCount,
-      showing: validRankings.length,
+      showing: finalRankings.length 
     });
   } catch (error) {
-    console.error("Error fetching rankings:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error('Error fetching rankings:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -261,7 +261,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Store battle result
-      const battleId = `battle:${Date.now()}`;
+      const now = Date.now();
+      const battleId = `battle:${now}`;
       const battleResult: Battle = {
         id: battleId,
         character1: characterId,
@@ -269,7 +270,7 @@ export async function POST(request: NextRequest) {
         winner: result.winner === 'character1' ? characterId : opponentId,
         isDraw: result.isDraw,
         explanation: result.explanation,
-        timestamp: Date.now(),
+        timestamp: now,
         narrative: result.explanation,
         league: character.league,
       };
@@ -313,7 +314,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Store battle result
-      const battleId = `battle:${Date.now()}`;
+      const now = Date.now();
+      const battleId = `battle:${now}`;
       const battleResult: Battle = {
         id: battleId,
         character1: characterId,
@@ -321,7 +323,7 @@ export async function POST(request: NextRequest) {
         winner: result.winner === 'character1' ? characterId : opponentId,
         isDraw: result.isDraw,
         explanation: result.explanation,
-        timestamp: Date.now(),
+        timestamp: now,
         narrative: result.explanation,
         league: character.league,
       };

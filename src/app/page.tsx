@@ -65,7 +65,7 @@ export default function Home() {
   // Render loading state during transition
   if (!isClient || !loginChecked) {
     return (
-      <main className="flex min-h-screen flex-col items-center p-4 md:p-8 pb-20">
+      <div className="flex min-h-screen flex-col items-center p-4 md:p-8 pb-20 scroll-container">
         <h1 className="text-3xl font-bold mb-8">Mitosis Text Hero Battle</h1>
         <div className="w-full max-w-2xl mb-6 flex justify-center">
           <div className="animate-pulse flex space-x-4">
@@ -79,12 +79,12 @@ export default function Home() {
             <div className="h-4 bg-slate-700 rounded w-5/6"></div>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-4 md:p-8 pb-20">
+    <div className="flex min-h-screen flex-col items-center p-4 md:p-8 pb-20 scroll-container">
       <h1 className="text-3xl font-bold mb-8">Mitosis Text Hero Battle</h1>
 
       {/* Error display */}
@@ -106,17 +106,18 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-2xl flex-1 overflow-y-auto scrollbar-thin">
         {isConnecting ? (
           <div className="flex justify-center items-center p-8">
             <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent"></div>
             <span className="ml-3 text-gray-400">Entering the arena...</span>
           </div>
         ) : (
-          <CharactersList />
+          <div className="space-y-6">
+            <CharactersList />
+            {isConnected && <LeagueSelector />}
+          </div>
         )}
-
-        {isConnected && <LeagueSelector />}
 
         {!isConnected && !isConnecting && (
           <div className="mt-8 bg-gray-800 rounded-lg p-6 text-center">
@@ -154,6 +155,6 @@ export default function Home() {
           </button>
         </div>
       )}
-    </main>
+    </div>
   );
 }

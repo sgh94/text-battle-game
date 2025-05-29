@@ -172,7 +172,7 @@ export function BattleComponent() {
   }
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 max-h-screen overflow-y-auto">
       <h2 className="text-xl font-bold mb-6">Practice Battle</h2>
 
       {isLoading ? (
@@ -190,8 +190,8 @@ export function BattleComponent() {
           </Link>
         </div>
       ) : (
-        <div>
-          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+        <div className="space-y-6 max-h-96 overflow-y-auto">
+          <div className="bg-gray-800 rounded-lg p-6">
             <h3 className="text-lg font-medium mb-4">Select Character</h3>
 
             <select
@@ -230,7 +230,7 @@ export function BattleComponent() {
           </div>
 
           {battleResult && opponent && (
-            <div className="bg-gray-800 rounded-lg p-6">
+            <div className="bg-gray-800 rounded-lg p-6 max-h-64 overflow-y-auto">
               <h3 className="text-lg font-medium mb-4">Battle Result</h3>
 
               <div className="flex justify-between items-center mb-6">
@@ -261,8 +261,8 @@ export function BattleComponent() {
                     <span className="text-red-500">Defeat!</span>
                   )}
                 </div>
-                <div className="bg-gray-700 p-4 rounded-lg">
-                  <p>{battleResult.explanation}</p>
+                <div className="bg-gray-700 p-4 rounded-lg overflow-y-auto max-h-32">
+                  <p className="text-sm whitespace-pre-line">{battleResult.explanation}</p>
                 </div>
               </div>
             </div>

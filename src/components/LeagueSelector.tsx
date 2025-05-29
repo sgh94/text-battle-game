@@ -1,14 +1,19 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useDiscordAuth } from '@/hooks/useDiscordAuth';
-import { getLeagueInfo, ROLE_REQUIREMENTS } from '@/lib/discord-roles';
-import Link from 'next/link';
+import { useState, useEffect } from "react";
+import { useDiscordAuth } from "@/hooks/useDiscordAuth";
+import { getLeagueInfo, ROLE_REQUIREMENTS } from "@/lib/discord-roles";
+import Link from "next/link";
 
 export function LeagueSelector() {
   const { user } = useDiscordAuth();
   const [expandedLeague, setExpandedLeague] = useState<string | null>(null);
-  const [allLeagues, setAllLeagues] = useState<string[]>(['general', 'veteran', 'community', 'morse']);
+  const [allLeagues, setAllLeagues] = useState<string[]>([
+    "general",
+    "veteran",
+    "community",
+    "morse",
+  ]);
 
   // Show all available leagues, even if user doesn't have access to them
   const leagues = allLeagues;
@@ -26,19 +31,20 @@ export function LeagueSelector() {
     if (!user || !user.roles) return false;
 
     // Get the required roles for this league
-    const requiredRoles = ROLE_REQUIREMENTS[leagueId as keyof typeof ROLE_REQUIREMENTS];
+    const requiredRoles =
+      ROLE_REQUIREMENTS[leagueId as keyof typeof ROLE_REQUIREMENTS];
     if (!requiredRoles) return false;
 
     // Check if user has at least one of the required roles
-    return requiredRoles.some(roleId => user.roles.includes(roleId));
+    return requiredRoles.some((roleId) => user.roles.includes(roleId));
   };
 
   return (
-    <div className="my-8">
+    <div className="my-8 max-h-screen overflow-y-auto">
       <h2 className="text-xl font-bold mb-4">League Types</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {leagues.map(leagueId => {
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+        {leagues.map((leagueId) => {
           const leagueInfo = getLeagueInfo(leagueId);
           const isExpanded = expandedLeague === leagueId;
           const userHasAccess = user ? hasLeagueAccess(leagueId) : false;
@@ -46,10 +52,11 @@ export function LeagueSelector() {
           return (
             <div
               key={leagueId}
-              className={`bg-gray-800 rounded-lg overflow-hidden border ${userHasAccess
-                ? 'border-gray-600 hover:border-gray-500'
-                : 'border-gray-700'
-                } transition`}
+              className={`bg-gray-800 rounded-lg overflow-hidden border ${
+                userHasAccess
+                  ? "border-gray-600 hover:border-gray-500"
+                  : "border-gray-700"
+              } transition`}
             >
               <div
                 className="p-4 cursor-pointer flex justify-between items-center"
@@ -59,30 +66,43 @@ export function LeagueSelector() {
                   <span className="text-xl mr-3">{leagueInfo.icon}</span>
                   <div>
                     <h3 className="font-medium">{leagueInfo.name}</h3>
-                    <p className="text-sm text-gray-400 line-clamp-1">{leagueInfo.description}</p>
+                    <p className="text-sm text-gray-400 line-clamp-1">
+                      {leagueInfo.description}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center">
                   {!userHasAccess && (
-                    <span className="mr-2 px-2 py-1 text-xs bg-red-900/50 text-red-300 rounded-md border border-red-800">Role Required</span>
+                    <span className="mr-2 px-2 py-1 text-xs bg-red-900/50 text-red-300 rounded-md border border-red-800">
+                      Role Required
+                    </span>
                   )}
                   <svg
-                    className={`w-5 h-5 transition-transform ${isExpanded ? 'transform rotate-180' : ''}`}
+                    className={`w-5 h-5 transition-transform ${
+                      isExpanded ? "transform rotate-180" : ""
+                    }`}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
                     xmlns="http://www.w3.org/2000/svg"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
                   </svg>
                 </div>
               </div>
 
               {isExpanded && (
-                <div className="px-4 pb-4 pt-1 border-t border-gray-700">
+                <div className="px-4 pb-4 pt-1 border-t border-gray-700 max-h-64 overflow-y-auto">
                   <p className="text-gray-300 mb-3">{leagueInfo.description}</p>
                   <div className="mb-3 bg-gray-700/50 p-3 rounded-md border-l-2 border-yellow-500">
-                    <h4 className="text-sm font-medium mb-1 text-gray-300">Required Discord Role:</h4>
+                    <h4 className="text-sm font-medium mb-1 text-gray-300">
+                      Required Discord Role:
+                    </h4>
                     <p className="text-sm">{leagueInfo.eligibility}</p>
                   </div>
 

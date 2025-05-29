@@ -31,7 +31,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <head>
         {/* Preconnect to Discord CDN and API to improve loading performance */}
         <link rel="preconnect" href="https://cdn.discordapp.com" />
@@ -39,13 +39,15 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://cdn.discordapp.com" />
         <link rel="dns-prefetch" href="https://discord.com" />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} h-full overflow-x-hidden`}>
         {/* Jotai Provider for state management */}
         <JotaiProvider>
           {/* Discord Provider */}
           <DiscordProvider>
-            <main className="min-h-screen flex flex-col">
-              {children}
+            <main className="min-h-screen max-h-screen flex flex-col overflow-y-auto scrollbar-thin">
+              <div className="flex-1 overflow-y-auto p-4">
+                {children}
+              </div>
             </main>
           </DiscordProvider>
         </JotaiProvider>

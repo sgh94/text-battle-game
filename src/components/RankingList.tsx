@@ -24,6 +24,12 @@ interface UserRanking {
   elo: number;
 }
 
+interface RankingResponse {
+  rankings: Character[];
+  total: number;
+  showing: number;
+}
+
 export function RankingList() {
   const { user } = useDiscordAuth();
   const [rankings, setRankings] = useState<Character[]>([]);
@@ -31,6 +37,8 @@ export function RankingList() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLeague, setSelectedLeague] = useState('general');
   const [allLeagues, setAllLeagues] = useState<string[]>(['general', 'veteran', 'community', 'morse']);
+  const [totalCount, setTotalCount] = useState(0);
+  const [showingCount, setShowingCount] = useState(0);
 
   // Debugging state
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -66,11 +74,13 @@ export function RankingList() {
       const response = await fetch(`/api/ranking?league=${leagueId}&limit=10&t=${timestamp}`);
 
       if (response.ok) {
-        const data = await response.json();
-        console.log(`Rankings for ${leagueId}:`, data.rankings);
+        const data: RankingResponse = await response.json();
+        console.log(`Rankings for ${leagueId}:`, data);
 
         // Set rankings directly - server already filters by league correctly
         setRankings(data.rankings || []);
+        setTotalCount(data.total || 0);
+        setShowingCount(data.showing || data.rankings?.length || 0);
 
         // If user is logged in, fetch their ranking
         if (userId) {
@@ -101,11 +111,15 @@ export function RankingList() {
         );
         setFetchError(`Failed to fetch rankings for league: ${leagueId}`);
         setRankings([]);
+        setTotalCount(0);
+        setShowingCount(0);
       }
     } catch (error) {
       console.error('Error fetching rankings:', error);
       setFetchError(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setRankings([]);
+      setTotalCount(0);
+      setShowingCount(0);
     } finally {
       setIsLoading(false);
     }
@@ -198,68 +212,67 @@ export function RankingList() {
           <div className="bg-gray-800 p-3 rounded-t-lg flex items-center border-b border-gray-700">
             <span className="text-xl mr-2">{getLeagueInfo(selectedLeague).icon}</span>
             <span className="font-bold">{getLeagueInfo(selectedLeague).name}</span>
-            <span className="ml-auto text-xs text-gray-500">
-              {rankings.length} heroes
-            </span>
           </div>
 
-          <div className="bg-gray-800 rounded-b-lg overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-700">
-                <tr>
-                  <th className="px-4 py-2 text-left">#</th>
-                  <th className="px-4 py-2 text-left">Hero</th>
-                  <th className="px-4 py-2 text-left">Summoner</th>
-                  <th className="px-4 py-2 text-right">Fame Points</th>
-                  <th className="px-4 py-2 text-right">W/L/D</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rankings.map((character, index) => (
-                  <tr
-                    key={character.id}
-                    className={`border-t border-gray-700 hover:bg-gray-700 transition ${userRanking?.characterId === character.id ? 'bg-purple-900 bg-opacity-30' : ''
-                      }`}
-                  >
-                    <td className="px-4 py-3">{index + 1}</td>
-                    <td className="px-4 py-3">
-                      <Link href={`/character/${character.id}`} className="text-purple-400 hover:text-purple-300">
-                        {character.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-gray-400">{formatAddress(character.owner)}</td>
-                    <td className="px-4 py-3 text-right font-bold">{character.elo}</td>
-                    <td className="px-4 py-3 text-right text-sm">
-                      <span className="text-green-500">{character.wins || 0}</span>/
-                      <span className="text-red-500">{character.losses || 0}</span>/
-                      <span className="text-gray-400">{character.draws || 0}</span>
-                    </td>
+          <div className="bg-gray-800 rounded-b-lg overflow-hidden max-h-96 overflow-y-auto scrollbar-thin">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-700 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-2 text-left">#</th>
+                    <th className="px-4 py-2 text-left">Hero</th>
+                    <th className="px-4 py-2 text-left">Summoner</th>
+                    <th className="px-4 py-2 text-right">Fame Points</th>
+                    <th className="px-4 py-2 text-right">W/L/D</th>
                   </tr>
-                ))}
-
-                {/* Show user's ranking if not in top 10 */}
-                {userRanking && !isUserInTopRankings() && (
-                  <>
-                    <tr className="border-t border-gray-600">
-                      <td colSpan={5} className="px-4 py-2 text-center text-xs text-gray-500">
-                        • • •
-                      </td>
-                    </tr>
-                    <tr className="border-t border-gray-700 bg-purple-900 bg-opacity-30">
-                      <td className="px-4 py-3">{userRanking.rank}</td>
+                </thead>
+                <tbody>
+                  {rankings.map((character, index) => (
+                    <tr
+                      key={character.id}
+                      className={`border-t border-gray-700 hover:bg-gray-700 transition ${userRanking?.characterId === character.id ? 'bg-purple-900 bg-opacity-30' : ''
+                        }`}
+                    >
+                      <td className="px-4 py-3">{index + 1}</td>
                       <td className="px-4 py-3">
-                        <Link href={`/character/${userRanking.characterId}`} className="text-purple-400 hover:text-purple-300">
-                          {userRanking.characterName}
+                        <Link href={`/character/${character.id}`} className="text-purple-400 hover:text-purple-300">
+                          {character.name}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-gray-400">{user ? user.username : ''}</td>
-                      <td className="px-4 py-3 text-right font-bold">{userRanking.elo}</td>
-                      <td className="px-4 py-3"></td>
+                      <td className="px-4 py-3 text-gray-400">{formatAddress(character.owner)}</td>
+                      <td className="px-4 py-3 text-right font-bold">{character.elo}</td>
+                      <td className="px-4 py-3 text-right text-sm">
+                        <span className="text-green-500">{character.wins || 0}</span>/
+                        <span className="text-red-500">{character.losses || 0}</span>/
+                        <span className="text-gray-400">{character.draws || 0}</span>
+                      </td>
                     </tr>
-                  </>
-                )}
-              </tbody>
-            </table>
+                  ))}
+
+                  {/* Show user's ranking if not in top 10 */}
+                  {userRanking && !isUserInTopRankings() && (
+                    <>
+                      <tr className="border-t border-gray-600">
+                        <td colSpan={5} className="px-4 py-2 text-center text-xs text-gray-500">
+                          • • •
+                        </td>
+                      </tr>
+                      <tr className="border-t border-gray-700 bg-purple-900 bg-opacity-30">
+                        <td className="px-4 py-3">{userRanking.rank}</td>
+                        <td className="px-4 py-3">
+                          <Link href={`/character/${userRanking.characterId}`} className="text-purple-400 hover:text-purple-300">
+                            {userRanking.characterName}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-gray-400">{user ? user.username : ''}</td>
+                        <td className="px-4 py-3 text-right font-bold">{userRanking.elo}</td>
+                        <td className="px-4 py-3"></td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

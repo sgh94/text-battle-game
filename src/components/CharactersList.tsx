@@ -107,7 +107,7 @@ export function CharactersList() {
   }
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 max-h-screen overflow-y-auto scrollbar-thin">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">My Heroes</h2>
       </div>
@@ -120,7 +120,7 @@ export function CharactersList() {
           </svg>
         </div>
       ) : characters.length === 0 ? (
-        <div className="bg-gray-800 rounded-lg p-6 text-center">
+        <div className="bg-gray-800 rounded-lg p-6 text-center max-h-96 overflow-y-auto scrollbar-thin">
           <p>No heroes yet. Summon your first hero in one of your available leagues!</p>
 
           {/* Display available leagues */}
@@ -153,7 +153,7 @@ export function CharactersList() {
           )}
         </div>
       ) : (
-        <div>
+        <div className="max-h-96 overflow-y-auto scrollbar-thin">
           <h3 className="text-lg font-medium mb-3">Your Leagues & Heroes</h3>
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             {user?.leagues && user.leagues.map(league => {
@@ -174,12 +174,12 @@ export function CharactersList() {
                     <Link href={`/character/${character.id}`}>
                       <div className="p-4 hover:bg-gray-700 transition cursor-pointer">
                         <div className="flex justify-between items-center">
-                          <div>
-                            <h3 className="font-medium text-lg">{character.name}</h3>
-                            <p className="text-gray-400 truncate max-w-md">{character.traits}</p>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-lg truncate">{character.name}</h3>
+                            <p className="text-gray-400 truncate max-w-full text-sm">{character.traits}</p>
                             <div className="text-xs text-gray-500 mt-1">ID: {formatOwnerId(character.owner)}</div>
                           </div>
-                          <div className="text-right">
+                          <div className="text-right ml-4 flex-shrink-0">
                             <div className="text-lg font-bold">{character.elo} Fame Points</div>
                             <div className="text-sm text-gray-400">
                               {character.wins}W {character.losses}L {character.draws}D

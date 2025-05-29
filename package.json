@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "next build && next start",
     "lint": "next lint",
     "allError": "npx tsc --noEmit > error.txt"
   },
@@ -44,5 +44,6 @@
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
-  }
+  },
+  "packageManager": "yarn@1.22.0+sha512.28c1cffc9ab9de364a4d8f624d4b77748565fdb7ba50fb3620da3debe0676472cac583537f03269601d368c5b2199a0eef8448e00205be75a162b5ead9448992"
 }

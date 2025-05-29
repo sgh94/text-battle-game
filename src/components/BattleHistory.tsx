@@ -89,8 +89,21 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
   };
 
   const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
+    if (!timestamp || timestamp === 0 || isNaN(timestamp)) {
+      return 'Unknown Date';
+    }
+    
+    try {
+      const date = new Date(timestamp);
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+      }
+      return date.toLocaleString();
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   if (isLoading) {
@@ -116,10 +129,10 @@ export function BattleHistory({ characterId }: BattleHistoryProps) {
   }
 
   return (
-    <div>
+    <div className="max-h-screen overflow-y-auto">
       <h2 className="text-xl font-bold mb-4">Battle History</h2>
       
-      <div className="space-y-4">
+      <div className="space-y-4 max-h-96 overflow-y-auto">
         {battles.map((battle) => {
           const isCharacter1 = battle.character1 === characterId;
           const opponentId = isCharacter1 ? battle.character2 : battle.character1;

@@ -24,13 +24,15 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Get the list of character IDs for the user
-    const characterIds = await kv.smembers(`user:${userId}:characters`);
+    const characterIdsResponse = await kv.smembers(`user:${userId}:characters`);
+    const characterIds = Array.isArray(characterIdsResponse) ? characterIdsResponse : [characterIdsResponse].filter(Boolean);
+    
     if (!characterIds || characterIds.length === 0) {
       console.log(`No characters found for user: ${userId}`);
       return NextResponse.json({ ranking: null });
     }
 
-    console.log(`User ${userId} has ${characterIds.length} characters`);
+    console.log(`User ${userId} has ${characterIds.length} characters:`, characterIds);
 
     // 3. Filter characters by league (each league is independent)
     const characterPromises = characterIds.map(id =>
@@ -38,15 +40,17 @@ export async function GET(request: NextRequest) {
     );
 
     const characters = await Promise.all(characterPromises);
+    console.log(`Fetched ${characters.length} character details for user ${userId}`);
 
     // Select only characters that exactly match the requested league
     const validCharacterIds = characterIds.filter((id, index) => {
       const character = characters[index];
+      console.log(`Character ${id}: league=${character?.league}, requested=${league}`);
       // Include only characters that exactly match the league (general is also an independent league)
       return character && character.league === league;
     });
 
-    console.log(`User ${userId} has ${validCharacterIds.length} characters in ${league} league`);
+    console.log(`User ${userId} has ${validCharacterIds.length} characters in ${league} league:`, validCharacterIds);
 
     if (validCharacterIds.length === 0) {
       return NextResponse.json({ ranking: null });
